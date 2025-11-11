@@ -1,0 +1,37 @@
+{
+  "name": "localvesting-app",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "babel-preset-expo": "^54.0.7",
+    "expo": "~54.0.23",
+    "expo-auth-session": "~7.0.8",
+    "expo-router": "^6.0.14",
+    "expo-status-bar": "~3.0.8",
+    "expo-web-browser": "~15.0.9",
+    "firebase": "^12.5.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-web": "^0.21.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "@types/react-native": "^0.72.8",
+    "autoprefixer": "^10.4.21",
+    "nativewind": "^4.2.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}
