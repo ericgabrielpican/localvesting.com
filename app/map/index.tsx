@@ -275,7 +275,7 @@
 
 //   return (
 //     <Screen>
-//       <Navbar />
+//       <Navbar active="map" />
 
 //       {isWeb ? (
 //         <WebMapContent

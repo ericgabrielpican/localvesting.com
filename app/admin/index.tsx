@@ -29,7 +29,7 @@ export default function Admin() {
 
   return (
     <Screen>
-      <Navbar />
+      <Navbar active="admin" showAdmin />
       <ScrollView contentContainerStyle={{ padding: Theme.spacing.lg }}>
         <Text style={styles.title}>Pending Verifications</Text>
 

@@ -35,7 +35,7 @@ export default function Dashboard() {
 
   return (
     <Screen>
-      <Navbar />
+      <Navbar active="dashboard" />
 
       <ScrollView contentContainerStyle={{ padding: Theme.spacing.lg }}>
         <Text style={styles.title}>Business Dashboard</Text>
