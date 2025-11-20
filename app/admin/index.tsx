@@ -1,54 +1,59 @@
-// src/components/Navbar.tsx
-import React from "react";
-import { View, Text, TouchableOpacity, Alert } from "react-native";
-import { useRouter } from "expo-router";
-import { useAuth } from "../../src/context/AuthContext";
-import { logout } from "../../src/firebase/auth";
+import React, { useEffect, useState } from "react";
+import { Text, ScrollView, StyleSheet } from "react-native";
+import Navbar from "../../src/components/Navbar";
+import Screen from "../../src/components/ui/Screen";
+import Card from "../../src/components/ui/Card";
+import Button from "../../src/components/ui/Button";
+import { Theme } from "../../src/styles/Theme";
 
-const Navbar: React.FC = () => {
-  const router = useRouter();
-  const { user } = useAuth();
+import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
+import { db } from "../../src/firebase/config";
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.replace("/login" as any);
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert("Logout error", e?.message ?? "Could not log out.");
-    }
+export default function Admin() {
+  const [pending, setPending] = useState<any[]>([]);
+
+  const load = async () => {
+    const snap = await getDocs(collection(db, "businesses"));
+    const arr = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+    setPending(arr.filter((b) => !b.verified));
   };
 
+  const verify = async (id: string) => {
+    await updateDoc(doc(db, "businesses", id), { verified: true });
+    load();
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
   return (
-    <View className="flex-row justify-between items-center px-4 py-3 bg-white border-b border-gray-200">
-      <TouchableOpacity onPress={() => router.push("/browse" as any)}>
-        <Text className="text-xl font-semibold text-primary">LocalVesting</Text>
-      </TouchableOpacity>
+    <Screen>
+      <Navbar />
+      <ScrollView contentContainerStyle={{ padding: Theme.spacing.lg }}>
+        <Text style={styles.title}>Pending Verifications</Text>
 
-      <View className="flex-row items-center space-x-4">
-        <TouchableOpacity onPress={() => router.push("/browse" as any)}>
-          <Text className="text-gray-700">Browse</Text>
-        </TouchableOpacity>
+        {pending.map((b) => (
+          <Card key={b.id}>
+            <Text style={styles.name}>{b.name}</Text>
+            <Text style={styles.sub}>{b.category}</Text>
+            <Text style={styles.sub}>{b.address}</Text>
 
-        <TouchableOpacity onPress={() => router.push("/dashboard" as any)}>
-          <Text className="text-gray-700">Dashboard</Text>
-        </TouchableOpacity>
+            <Button label="Verify" onPress={() => verify(b.id)} />
+          </Card>
+        ))}
 
-        {/* Admin entry – for now visible when logged in; later we can gate this by isAdmin from Firestore */}
-        {user && (
-          <TouchableOpacity onPress={() => router.push("/admin" as any)}>
-            <Text className="text-gray-700">Admin</Text>
-          </TouchableOpacity>
+        {pending.length === 0 && (
+          <Text style={styles.empty}>No pending businesses.</Text>
         )}
-
-        {user && (
-          <TouchableOpacity onPress={handleLogout}>
-            <Text className="text-gray-400 text-sm">Logout</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
+      </ScrollView>
+    </Screen>
   );
-};
+}
 
-export default Navbar;
+const styles = StyleSheet.create({
+  title: { ...Theme.typography.title, marginBottom: Theme.spacing.lg },
+  name: { ...Theme.typography.title },
+  sub: { ...Theme.typography.subtitle },
+  empty: { ...Theme.typography.subtitle, marginTop: Theme.spacing.md },
+});

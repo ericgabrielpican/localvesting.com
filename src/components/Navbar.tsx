@@ -1,54 +1,54 @@
-// src/components/Navbar.tsx
 import React from "react";
-import { View, Text, TouchableOpacity, Alert } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "../context/AuthContext";
 import { logout } from "../firebase/auth";
+import { Theme } from "../styles/Theme";
 
-const Navbar: React.FC = () => {
+export default function Navbar() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.replace("/login" as any);
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert("Logout error", e?.message ?? "Could not log out.");
-    }
-  };
-
   return (
-    <View className="flex-row justify-between items-center px-4 py-3 bg-white border-b border-gray-200">
-      <TouchableOpacity onPress={() => router.push("/browse" as any)}>
-        <Text className="text-xl font-semibold text-primary">LocalVesting</Text>
+    <View style={styles.container}>
+      <TouchableOpacity onPress={() => router.push("/" as any)}>
+        <Text style={styles.logo}>LocalVesting</Text>
       </TouchableOpacity>
-
-      <View className="flex-row items-center space-x-4">
+      <View style={styles.right}>
         <TouchableOpacity onPress={() => router.push("/browse" as any)}>
-          <Text className="text-gray-700">Browse</Text>
+          <Text style={styles.link}>Browse</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.push("/dashboard" as any)}>
-          <Text className="text-gray-700">Dashboard</Text>
-        </TouchableOpacity>
-
-        {/* Admin entry – for now visible when logged in; later we can gate this by isAdmin from Firestore */}
         {user && (
-          <TouchableOpacity onPress={() => router.push("/admin" as any)}>
-            <Text className="text-gray-700">Admin</Text>
-          </TouchableOpacity>
-        )}
-
-        {user && (
-          <TouchableOpacity onPress={handleLogout}>
-            <Text className="text-gray-400 text-sm">Logout</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity onPress={() => router.push("/dashboard" as any)}>
+              <Text style={styles.link}>Dashboard</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/admin" as any)}>
+              <Text style={styles.link}>Admin</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => logout()}>
+              <Text style={styles.logout}>Logout</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </View>
   );
-};
+}
 
-export default Navbar;
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.colors.border,
+    backgroundColor: Theme.colors.surface,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  logo: { fontSize: 18, fontWeight: "700", color: Theme.colors.primary },
+  right: { flexDirection: "row", alignItems: "center" },
+  link: { marginLeft: Theme.spacing.lg, color: Theme.colors.textMuted, fontSize: 14 },
+  logout: { marginLeft: Theme.spacing.lg, color: Theme.colors.textSubtle, fontSize: 12 },
+});

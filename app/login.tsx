@@ -1,158 +1,289 @@
-import React, { useEffect, useState } from "react";
+// app/login.tsx
+import React, { useState } from "react";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  ActivityIndicator,
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
 import {
   loginWithEmailPassword,
   registerWithEmailPassword,
   resetPassword,
   loginWithGoogleWeb,
-  loginWithGoogleIdToken,
 } from "../src/firebase/auth";
-import TextField from "../src/components/TextField";
-import PrimaryButton from "../src/components/PrimaryButton";
-
-WebBrowser.maybeCompleteAuthSession();
-
-const WEB_CLIENT_ID = "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com";
-const ANDROID_CLIENT_ID = "YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com";
-const IOS_CLIENT_ID = "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com";
 
 export default function LoginScreen() {
   const router = useRouter();
+
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: WEB_CLIENT_ID,
-    androidClientId: ANDROID_CLIENT_ID || WEB_CLIENT_ID,
-    iosClientId: IOS_CLIENT_ID || WEB_CLIENT_ID,
-  });
-
-  useEffect(() => {
-    const handleResponse = async () => {
-      if (response?.type !== "success") return;
-      const idToken = response.params?.id_token;
-      if (!idToken) return;
-      try {
-        setGoogleLoading(true);
-        await loginWithGoogleIdToken(idToken);
-        router.replace("/onboarding/chooseRole");
-      } catch (e: any) {
-        Alert.alert("Google sign-in error", e.message);
-      } finally {
-        setGoogleLoading(false);
-      }
-    };
-    handleResponse();
-  }, [response]);
-
   const handleSubmit = async () => {
     if (!email.trim() || !password) {
       Alert.alert("Missing info", "Please enter email and password.");
       return;
     }
+
     try {
       setSubmitting(true);
-      if (mode === "login") await loginWithEmailPassword(email, password);
-      else await registerWithEmailPassword(email, password);
-      router.replace("/onboarding/chooseRole");
+
+      if (mode === "login") {
+        await loginWithEmailPassword(email, password);
+      } else {
+        await registerWithEmailPassword(email, password);
+      }
+
+      // Auth OK → go to role selection
+      router.replace("/onboarding/chooseRole" as any);
     } catch (e: any) {
-      Alert.alert("Authentication error", e.message);
+      console.error(e);
+      Alert.alert(
+        "Authentication error",
+        e?.message ?? "Could not authenticate."
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleResetPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert("Enter email", "Please enter your email first.");
+      return;
+    }
+    try {
+      await resetPassword(email);
+      Alert.alert(
+        "Password reset",
+        "If an account exists for that email, you'll receive a reset link."
+      );
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert(
+        "Error",
+        e?.message ?? "Could not send password reset email."
+      );
+    }
+  };
+
+  const handleGoogle = async () => {
     try {
       setGoogleLoading(true);
+
       if (Platform.OS === "web") {
+        // Web: use Firebase popup
         await loginWithGoogleWeb();
-        router.replace("/onboarding/chooseRole");
+        router.replace("/onboarding/chooseRole" as any);
       } else {
-        await promptAsync();
+        // Native: not implemented yet
+        Alert.alert(
+          "Not available yet",
+          "Google sign-in is currently implemented for web only."
+        );
       }
     } catch (e: any) {
-      Alert.alert("Google sign-in error", e.message);
+      console.error(e);
+      Alert.alert(
+        "Google sign-in error",
+        e?.message ?? "Could not sign in with Google."
+      );
     } finally {
       setGoogleLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white px-5 justify-center">
-      <Text className="text-center text-2xl font-bold text-primary mb-1">
-        {mode === "login" ? "Welcome Back" : "Create Account"}
-      </Text>
-      <Text className="text-center text-gray-500 mb-6">
-        Use your LocalVesting account to continue
-      </Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }}>
+      <View
+        style={{
+          flex: 1,
+          paddingHorizontal: 24,
+          justifyContent: "center",
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: "700",
+            color: "#111827",
+            marginBottom: 8,
+          }}
+        >
+          {mode === "login" ? "Welcome back" : "Create account"}
+        </Text>
 
-      <TextField label="Email" value={email} onChangeText={setEmail} />
-      <TextField
-        label="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
+        <Text
+          style={{
+            fontSize: 14,
+            color: "#6b7280",
+            marginBottom: 24,
+          }}
+        >
+          Use your LocalVesting account to continue.
+        </Text>
 
-      <PrimaryButton
-        label={
-          submitting
-            ? "Please wait..."
-            : mode === "login"
-            ? "Log in"
-            : "Sign up"
-        }
-        onPress={handleSubmit}
-        disabled={submitting}
-      />
+        {/* Email */}
+        <Text style={{ marginBottom: 4, color: "#374151", fontSize: 14 }}>
+          Email
+        </Text>
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          placeholder="you@example.com"
+          placeholderTextColor="#9ca3af"
+          style={{
+            borderWidth: 1,
+            borderColor: "#d1d5db",
+            borderRadius: 12,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            marginBottom: 16,
+          }}
+        />
 
-      {mode === "login" && (
-        <TouchableOpacity onPress={() => resetPassword(email)}>
-          <Text className="text-center text-sm text-primary mt-3">
-            Forgot password?
+        {/* Password */}
+        <Text style={{ marginBottom: 4, color: "#374151", fontSize: 14 }}>
+          Password
+        </Text>
+        <TextInput
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholder="••••••••"
+          placeholderTextColor="#9ca3af"
+          style={{
+            borderWidth: 1,
+            borderColor: "#d1d5db",
+            borderRadius: 12,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            marginBottom: 12,
+          }}
+        />
+
+        {mode === "login" && (
+          <TouchableOpacity onPress={handleResetPassword}>
+            <Text
+              style={{
+                fontSize: 13,
+                color: "#2563eb",
+                marginBottom: 20,
+              }}
+            >
+              Forgot password?
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Email/password submit */}
+        <TouchableOpacity
+          onPress={handleSubmit}
+          disabled={submitting}
+          style={{
+            backgroundColor: "#2563eb",
+            borderRadius: 12,
+            paddingVertical: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 16,
+            opacity: submitting ? 0.7 : 1,
+          }}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text
+              style={{
+                color: "#ffffff",
+                fontWeight: "600",
+                fontSize: 16,
+              }}
+            >
+              {mode === "login" ? "Log in" : "Sign up"}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Divider */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginVertical: 12,
+          }}
+        >
+          <View
+            style={{ flex: 1, height: 1, backgroundColor: "#e5e7eb" }}
+          />
+          <Text
+            style={{
+              marginHorizontal: 8,
+              fontSize: 12,
+              color: "#9ca3af",
+            }}
+          >
+            OR
+          </Text>
+          <View
+            style={{ flex: 1, height: 1, backgroundColor: "#e5e7eb" }}
+          />
+        </View>
+
+        {/* Google button */}
+        <TouchableOpacity
+          onPress={handleGoogle}
+          disabled={googleLoading}
+          style={{
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "#d1d5db",
+            paddingVertical: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 16,
+            backgroundColor: "#ffffff",
+            opacity: googleLoading ? 0.7 : 1,
+          }}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color="#111827" />
+          ) : (
+            <Text style={{ color: "#111827", fontSize: 14 }}>
+              Continue with Google
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Toggle login/signup */}
+        <TouchableOpacity
+          onPress={() =>
+            setMode((prev) => (prev === "login" ? "signup" : "login"))
+          }
+        >
+          <Text
+            style={{
+              fontSize: 13,
+              color: "#4b5563",
+              textAlign: "center",
+            }}
+          >
+            {mode === "login"
+              ? "No account? Tap here to sign up."
+              : "Already have an account? Log in."}
           </Text>
         </TouchableOpacity>
-      )}
-
-      <View className="flex-row items-center my-6">
-        <View className="flex-1 h-[1px] bg-gray-200" />
-        <Text className="mx-2 text-gray-400 text-sm">OR</Text>
-        <View className="flex-1 h-[1px] bg-gray-200" />
       </View>
-
-      <PrimaryButton
-        label={googleLoading ? "Connecting..." : "Continue with Google"}
-        onPress={handleGoogleSignIn}
-        style="bg-white border border-gray-300"
-        textClass="text-black"
-        disabled={googleLoading}
-      />
-
-      <TouchableOpacity
-        onPress={() =>
-          setMode((p) => (p === "login" ? "signup" : "login"))
-        }
-      >
-        <Text className="text-center text-gray-500 mt-6">
-          {mode === "login"
-            ? "No account? Tap here to sign up."
-            : "Already have an account? Log in."}
-        </Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }

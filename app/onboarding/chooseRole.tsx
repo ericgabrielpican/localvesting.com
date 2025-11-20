@@ -1,32 +1,43 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
+import Screen from "../../src/components/ui/Screen";
+import Navbar from "../../src/components/Navbar";
+import Card from "../../src/components/ui/Card";
+import Button from "../../src/components/ui/Button";
+import { Theme } from "../../src/styles/Theme";
 import { useRouter } from "expo-router";
 
 export default function ChooseRole() {
   const router = useRouter();
+
   return (
-    <View className="flex-1 bg-white items-center justify-center px-6">
-      <Text className="text-2xl font-semibold text-primary mb-6">
-        Choose your role
-      </Text>
+    <Screen>
+      <Navbar />
 
-      <TouchableOpacity
-        className="w-full bg-primary py-3 rounded-xl mb-4"
-        onPress={() => router.push("/onboarding/investorSetup")}
-      >
-        <Text className="text-center text-white text-lg font-medium">
-          I’m an Investor
-        </Text>
-      </TouchableOpacity>
+      <View style={{ padding: Theme.spacing.lg }}>
+        <Card>
+          <Text style={styles.title}>Choose role</Text>
 
-      <TouchableOpacity
-        className="w-full bg-white border border-primary py-3 rounded-xl"
-        onPress={() => router.push("/onboarding/businessSetup")}
-      >
-        <Text className="text-center text-primary text-lg font-medium">
-          I’m a Business Owner
-        </Text>
-      </TouchableOpacity>
-    </View>
+          <Button
+            label="I am an investor"
+            onPress={() => router.push("/onboarding/investorSetup" as any)}
+          />
+
+          <Button
+            label="I am a business owner"
+            variant="secondary"
+            onPress={() => router.push("/onboarding/businessSetup" as any)}
+          />
+        </Card>
+      </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  title: {
+    ...Theme.typography.title,
+    textAlign: "center",
+    marginBottom: Theme.spacing.lg,
+  },
+});
