@@ -1,12 +1,10 @@
-// src/components/NavBar.tsx
+// src/components/Navbar.tsx
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { useAuth } from "../context/AuthContext";
 import { Theme } from "../styles/Theme";
 import { logout } from "../firebase/auth";
-import { getDoc, doc } from "firebase/firestore";
-import { db } from "../firebase/config";
 
 type NavItemKey =
   | "browse"
@@ -20,69 +18,17 @@ interface NavBarProps {
   active?: NavItemKey;
 }
 
+const ADMIN_EMAIL = "meeoe49@gmail.com"; // change if needed
+
 const NavBar: React.FC<NavBarProps> = ({ active }) => {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
 
-  const [isAdmin, setIsAdmin] = React.useState(false);
-  const [roleLabel, setRoleLabel] = React.useState("User");
+  const email = user?.email ?? null;
+  const isAdmin = !!email && email === ADMIN_EMAIL;
 
-  React.useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      setRoleLabel("Guest");
-      return;
-    }
-
-    const loadProfile = async () => {
-      try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        const hardcodedAdminEmail = "ericgabrielpican@gmail.com";
-        const isEmailAdmin = user.email === hardcodedAdminEmail;
-
-        if (snap.exists()) {
-          const data = snap.data() as any;
-          const rawRole = (data.role || "").toString().toLowerCase().trim();
-
-          console.log("NavBar loaded role:", rawRole, "email:", user.email);
-
-          // Treat either Firestore admin role OR this email as admin
-          if (rawRole === "admin" || isEmailAdmin) {
-            setIsAdmin(true);
-            setRoleLabel("Admin");
-          } else if (rawRole === "business") {
-            setIsAdmin(false);
-            setRoleLabel("Business");
-          } else if (rawRole === "investor") {
-            setIsAdmin(false);
-            setRoleLabel("Investor");
-          } else {
-            setIsAdmin(false);
-            setRoleLabel("User");
-          }
-        } else {
-          console.log("NavBar: user profile doc not found for", user.uid);
-          // Still allow hardcoded admin by email
-          if (isEmailAdmin) {
-            setIsAdmin(true);
-            setRoleLabel("Admin");
-          } else {
-            setIsAdmin(false);
-            setRoleLabel("User");
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load user role in NavBar", err);
-        setIsAdmin(false);
-        setRoleLabel("User");
-      }
-    };
-
-    loadProfile();
-  }, [user]);
-
-  // Infer active tab from current route if prop not passed
+  // Figure out active tab for logged-in nav
   const inferredActive: NavItemKey | undefined = (() => {
     if (pathname.startsWith("/browse")) return "browse";
     if (pathname.startsWith("/map")) return "map";
@@ -107,7 +53,7 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
     ? [...baseItems, { key: "admin", label: "Admin Panel", path: "/admin" }]
     : baseItems;
 
-  const displayName = user?.displayName || user?.email || "Account";
+  const displayName = user?.displayName || email || "Account";
 
   const handleLogout = async () => {
     try {
@@ -119,6 +65,59 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
     }
   };
 
+  const goHome = () => router.push("/" as any);
+  const goLogin = () => router.push("/login" as any);
+  const goSignup = () => router.push("/login" as any); // same screen, different mode inside
+
+  // ---------- PUBLIC NAVBAR (NOT LOGGED IN) ----------
+  if (!user) {
+    return (
+      <View style={styles.root}>
+        <View style={styles.inner}>
+          {/* LEFT: Logo / brand */}
+          <Pressable onPress={goHome} style={styles.logoContainer}>
+            <View style={styles.logoPill}>
+              <Text style={styles.logoIcon}>📈</Text>
+            </View>
+            <View>
+              <Text style={styles.appTitle}>Local Vesting</Text>
+              <Text style={styles.appSubtitle}>
+                Invest in local businesses
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* CENTER: Marketing nav links (all go to / for now) */}
+          <View style={styles.publicCenterNav}>
+            <Pressable onPress={goHome} style={styles.publicNavItem}>
+              <Text style={styles.publicNavText}>Home</Text>
+            </Pressable>
+            <Pressable onPress={goHome} style={styles.publicNavItem}>
+              <Text style={styles.publicNavText}>How it works</Text>
+            </Pressable>
+            <Pressable onPress={goHome} style={styles.publicNavItem}>
+              <Text style={styles.publicNavText}>For investors</Text>
+            </Pressable>
+            <Pressable onPress={goHome} style={styles.publicNavItem}>
+              <Text style={styles.publicNavText}>For businesses</Text>
+            </Pressable>
+          </View>
+
+          {/* RIGHT: Auth CTAs */}
+          <View style={styles.publicRight}>
+            <Pressable style={styles.loginButton} onPress={goLogin}>
+              <Text style={styles.loginButtonLabel}>Log in</Text>
+            </Pressable>
+            <Pressable style={styles.signupButton} onPress={goSignup}>
+              <Text style={styles.signupButtonLabel}>Sign up</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ---------- AUTHENTICATED NAVBAR ----------
   return (
     <View style={styles.root}>
       <View style={styles.inner}>
@@ -136,7 +135,7 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
           </View>
         </Pressable>
 
-        {/* CENTER: Nav items */}
+        {/* CENTER: App nav items */}
         <View style={styles.navItemsContainer}>
           {items.map((item) => {
             const isActive = current === item.key;
@@ -173,15 +172,15 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
                   ? displayName.slice(0, 16) + "…"
                   : displayName}
               </Text>
-              <Text style={styles.userRole}>{roleLabel}</Text>
+              <Text style={styles.userRole}>
+                {isAdmin ? "Admin" : "User"}
+              </Text>
             </View>
           </View>
 
-          {user && (
-            <Pressable style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutText}>Logout</Text>
-            </Pressable>
-          )}
+          <Pressable style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </Pressable>
         </View>
       </View>
     </View>
@@ -210,6 +209,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
+
+  // Logo / brand
   logoContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -236,6 +237,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Theme.colors.textSubtle,
   },
+
+  // Authenticated center nav
   navItemsContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -259,6 +262,8 @@ const styles = StyleSheet.create({
     color: Theme.colors.primary,
     fontWeight: "600",
   },
+
+  // Right section (logged in)
   rightSection: {
     flexDirection: "row",
     alignItems: "center",
@@ -308,6 +313,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#FFFFFF",
+  },
+
+  // Public (logged-out) center nav
+  publicCenterNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 1,
+    gap: 12 as any,
+  },
+  publicNavItem: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  publicNavText: {
+    fontSize: 13,
+    color: Theme.colors.textSubtle,
+  },
+
+  // Public (logged-out) right side
+  publicRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  loginButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    backgroundColor: Theme.colors.surface,
+  },
+  loginButtonLabel: {
+    fontSize: 13,
+    color: Theme.colors.text,
+    fontWeight: "500",
+  },
+  signupButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: Theme.colors.primary,
+  },
+  signupButtonLabel: {
+    fontSize: 13,
+    color: Theme.colors.primaryText,
+    fontWeight: "600",
   },
 });
 
