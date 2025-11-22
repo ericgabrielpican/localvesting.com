@@ -299,7 +299,7 @@ const BrowseScreen: React.FC = () => {
             <View style={styles.campaignCardWrapper}>
               <Pressable
                 style={styles.addCampaignCard}
-                onPress={() => router.push("/createCampaign" as any)}
+                onPress={() => router.push("/dashboard/createCampaign" as any)}
               >
                 <View style={styles.addCampaignIconCircle}>
                   <Text style={styles.addCampaignIcon}>+</Text>

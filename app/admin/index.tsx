@@ -1,59 +1,122 @@
+// app/admin/index.tsx
 import React, { useEffect, useState } from "react";
-import { Text, ScrollView, StyleSheet } from "react-native";
-import Navbar from "../../src/components/Navbar";
+import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
+import { doc, getDoc } from "firebase/firestore";
+
+import { useAuth } from "../../src/context/AuthContext";
+import { db } from "../../src/firebase/config";
+import NavBar from "../../src/components/Navbar";
 import Screen from "../../src/components/ui/Screen";
-import Card from "../../src/components/ui/Card";
-import Button from "../../src/components/ui/Button";
 import { Theme } from "../../src/styles/Theme";
 
-import { collection, getDocs, updateDoc, doc } from "firebase/firestore";
-import { db } from "../../src/firebase/config";
+const ADMIN_EMAIL = "ericgabrielpican@gmail.com"; // 
 
-export default function Admin() {
-  const [pending, setPending] = useState<any[]>([]);
+export default function AdminPage() {
+  const { user } = useAuth();
+  const router = useRouter();
 
-  const load = async () => {
-    const snap = await getDocs(collection(db, "businesses"));
-    const arr = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-    setPending(arr.filter((b) => !b.verified));
-  };
-
-  const verify = async (id: string) => {
-    await updateDoc(doc(db, "businesses", id), { verified: true });
-    load();
-  };
+  const [checking, setChecking] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!user) {
+      // Not logged in → send to login
+      router.replace("/login");
+      return;
+    }
 
+    const checkAdmin = async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+
+        let role: string | null = null;
+        if (snap.exists()) {
+          const data = snap.data() as any;
+          role = (data.role || "").toString().toLowerCase().trim();
+        }
+
+        const emailIsAdmin = user.email === ADMIN_EMAIL;
+        const firestoreIsAdmin = role === "admin";
+
+        if (emailIsAdmin || firestoreIsAdmin) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (err) {
+        console.error("Admin check failed:", err);
+        setIsAdmin(false);
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkAdmin();
+  }, [user]);
+
+  // While checking admin rights
+  if (checking) {
+    return (
+      <Screen>
+        <NavBar active="admin" />
+        <View style={styles.center}>
+          <ActivityIndicator />
+          <Text style={styles.muted}>Checking permissions…</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  // Logged in but not admin
+  if (!isAdmin) {
+    return (
+      <Screen>
+        <NavBar />
+        <View style={styles.center}>
+          <Text style={styles.title}>Access denied</Text>
+          <Text style={styles.muted}>
+            You don&apos;t have permission to view the admin panel.
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  // ✅ Admin content goes here
   return (
     <Screen>
-      <Navbar active="admin" showAdmin />
-      <ScrollView contentContainerStyle={{ padding: Theme.spacing.lg }}>
-        <Text style={styles.title}>Pending Verifications</Text>
-
-        {pending.map((b) => (
-          <Card key={b.id}>
-            <Text style={styles.name}>{b.name}</Text>
-            <Text style={styles.sub}>{b.category}</Text>
-            <Text style={styles.sub}>{b.address}</Text>
-
-            <Button label="Verify" onPress={() => verify(b.id)} />
-          </Card>
-        ))}
-
-        {pending.length === 0 && (
-          <Text style={styles.empty}>No pending businesses.</Text>
-        )}
-      </ScrollView>
+      <NavBar active="admin" />
+      <View style={styles.page}>
+        {/* 👉 Paste your existing admin UI here (business verification, campaign approvals, etc.) */}
+        <Text style={styles.title}>Admin Panel</Text>
+        <Text style={styles.muted}>
+          Here you can manage business verifications, campaigns, support, etc.
+        </Text>
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { ...Theme.typography.title, marginBottom: Theme.spacing.lg },
-  name: { ...Theme.typography.title },
-  sub: { ...Theme.typography.subtitle },
-  empty: { ...Theme.typography.subtitle, marginTop: Theme.spacing.md },
+  page: {
+    flex: 1,
+    backgroundColor: Theme.colors.background,
+    padding: Theme.spacing.lg,
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Theme.spacing.lg,
+  },
+  title: {
+    ...Theme.typography.title,
+    marginBottom: 8,
+  },
+  muted: {
+    ...Theme.typography.body,
+    color: Theme.colors.textMuted,
+    textAlign: "center",
+  },
 });

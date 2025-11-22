@@ -4,6 +4,9 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { useAuth } from "../context/AuthContext";
 import { Theme } from "../styles/Theme";
+import { logout } from "../firebase/auth";
+import { getDoc, doc } from "firebase/firestore";
+import { db } from "../firebase/config";
 
 type NavItemKey =
   | "browse"
@@ -14,16 +17,70 @@ type NavItemKey =
   | "admin";
 
 interface NavBarProps {
-  /** Which item should be highlighted as active */
   active?: NavItemKey;
-  /** Show Admin Panel tab (for admin users only) */
-  showAdmin?: boolean;
 }
 
-const NavBar: React.FC<NavBarProps> = ({ active, showAdmin }) => {
+const NavBar: React.FC<NavBarProps> = ({ active }) => {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
+
+  const [isAdmin, setIsAdmin] = React.useState(false);
+  const [roleLabel, setRoleLabel] = React.useState("User");
+
+  React.useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      setRoleLabel("Guest");
+      return;
+    }
+
+    const loadProfile = async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        const hardcodedAdminEmail = "ericgabrielpican@gmail.com";
+        const isEmailAdmin = user.email === hardcodedAdminEmail;
+
+        if (snap.exists()) {
+          const data = snap.data() as any;
+          const rawRole = (data.role || "").toString().toLowerCase().trim();
+
+          console.log("NavBar loaded role:", rawRole, "email:", user.email);
+
+          // Treat either Firestore admin role OR this email as admin
+          if (rawRole === "admin" || isEmailAdmin) {
+            setIsAdmin(true);
+            setRoleLabel("Admin");
+          } else if (rawRole === "business") {
+            setIsAdmin(false);
+            setRoleLabel("Business");
+          } else if (rawRole === "investor") {
+            setIsAdmin(false);
+            setRoleLabel("Investor");
+          } else {
+            setIsAdmin(false);
+            setRoleLabel("User");
+          }
+        } else {
+          console.log("NavBar: user profile doc not found for", user.uid);
+          // Still allow hardcoded admin by email
+          if (isEmailAdmin) {
+            setIsAdmin(true);
+            setRoleLabel("Admin");
+          } else {
+            setIsAdmin(false);
+            setRoleLabel("User");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load user role in NavBar", err);
+        setIsAdmin(false);
+        setRoleLabel("User");
+      }
+    };
+
+    loadProfile();
+  }, [user]);
 
   // Infer active tab from current route if prop not passed
   const inferredActive: NavItemKey | undefined = (() => {
@@ -31,6 +88,8 @@ const NavBar: React.FC<NavBarProps> = ({ active, showAdmin }) => {
     if (pathname.startsWith("/map")) return "map";
     if (pathname.startsWith("/dashboard")) return "dashboard";
     if (pathname.startsWith("/admin")) return "admin";
+    if (pathname.startsWith("/mybusinesses")) return "businesses";
+    if (pathname.startsWith("/support")) return "support";
     return undefined;
   })();
 
@@ -41,14 +100,24 @@ const NavBar: React.FC<NavBarProps> = ({ active, showAdmin }) => {
     { key: "map", label: "Map", path: "/map" },
     { key: "dashboard", label: "Dashboard", path: "/dashboard" },
     { key: "businesses", label: "My Businesses", path: "/mybusinesses" },
-    { key: "support", label: "Support", path: "/support" }, 
+    { key: "support", label: "Support", path: "/support" },
   ];
 
-  const items = showAdmin
+  const items = isAdmin
     ? [...baseItems, { key: "admin", label: "Admin Panel", path: "/admin" }]
     : baseItems;
 
   const displayName = user?.displayName || user?.email || "Account";
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.replace("/login");
+    } catch (err) {
+      console.error("Logout failed", err);
+      alert("Could not log out. Please try again.");
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -75,10 +144,7 @@ const NavBar: React.FC<NavBarProps> = ({ active, showAdmin }) => {
               <Pressable
                 key={item.key}
                 onPress={() => router.push(item.path as any)}
-                style={[
-                  styles.navItem,
-                  isActive && styles.navItemActive,
-                ]}
+                style={[styles.navItem, isActive && styles.navItemActive]}
               >
                 <Text
                   style={[
@@ -93,22 +159,29 @@ const NavBar: React.FC<NavBarProps> = ({ active, showAdmin }) => {
           })}
         </View>
 
-        {/* RIGHT: User chip */}
-        <View style={styles.userChip}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.userAvatarText}>
-              {displayName.charAt(0).toUpperCase()}
-            </Text>
+        {/* RIGHT: User chip + Logout */}
+        <View style={styles.rightSection}>
+          <View style={styles.userChip}>
+            <View style={styles.userAvatar}>
+              <Text style={styles.userAvatarText}>
+                {displayName.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.userName}>
+                {displayName.length > 18
+                  ? displayName.slice(0, 16) + "…"
+                  : displayName}
+              </Text>
+              <Text style={styles.userRole}>{roleLabel}</Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.userName}>
-              {displayName.length > 18
-                ? displayName.slice(0, 16) + "…"
-                : displayName}
-            </Text>
-            <Text style={styles.userRole}>Business</Text>
-            {/* later you can change this based on role (Investor / Business / Admin) */}
-          </View>
+
+          {user && (
+            <Pressable style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutText}>Logout</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </View>
@@ -137,7 +210,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  // Left logo/title
   logoContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -164,14 +236,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Theme.colors.textSubtle,
   },
-
-  // Center nav items
   navItemsContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 1,
-    gap: 6 as any, // RN web will accept this, native ignores
+    gap: 6 as any,
   },
   navItem: {
     paddingHorizontal: 12,
@@ -189,8 +259,11 @@ const styles = StyleSheet.create({
     color: Theme.colors.primary,
     fontWeight: "600",
   },
-
-  // Right user chip
+  rightSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   userChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -223,6 +296,18 @@ const styles = StyleSheet.create({
   userRole: {
     fontSize: 10,
     color: Theme.colors.textSubtle,
+  },
+  logoutButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#EF4444",
+    marginLeft: 4,
+  },
+  logoutText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });
 

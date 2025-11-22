@@ -18,6 +18,9 @@ import {
   loginWithGoogleWeb,
 } from "../src/firebase/auth";
 
+import { db } from "../src/firebase/config";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+
 export default function LoginScreen() {
   const router = useRouter();
 
@@ -26,6 +29,79 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // 🔥 This function decides where to send the user AFTER login
+ const handlePostLogin = async (user: any) => {
+  const ref = doc(db, "users", user.uid);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    // First-time user → create profile
+    await setDoc(ref, {
+      email: user.email ?? null,
+      role: null,
+      createdAt: serverTimestamp(),
+    });
+
+    router.replace("/onboarding/chooseRole" as any);
+    return;
+  }
+
+  const data = snap.data() as any;
+
+  // 🔧 Auto-fix missing fields (old docs, Google users, etc.)
+  const update: any = {};
+  let needsUpdate = false;
+
+  if (!data.email && user.email) {
+    update.email = user.email;
+    needsUpdate = true;
+  }
+  if (typeof data.role === "undefined") {
+    update.role = null;
+    needsUpdate = true;
+  }
+
+  if (needsUpdate) {
+    await setDoc(ref, { ...data, ...update }, { merge: true });
+  }
+
+  const role = (data.role ?? update.role) ?? null;
+
+  // If still no role → onboarding
+  if (!role) {
+    router.replace("/onboarding/chooseRole" as any);
+    return;
+  }
+
+  // redirect based on role
+  if (role === "admin") {
+    router.replace("/admin");
+    return;
+  }
+
+  if (role === "business") {
+    if (data.businessSetupComplete) {
+      router.replace("/dashboard");
+    } else {
+      router.replace("/onboarding/businessSetup");
+    }
+    return;
+  }
+
+  if (role === "investor") {
+    if (data.investorSetupComplete) {
+      router.replace("/browse");
+    } else {
+      router.replace("/onboarding/investorSetup");
+    }
+    return;
+  }
+
+  // Fallback: unknown role → choose role again
+  router.replace("/onboarding/chooseRole");
+};
+
 
   const handleSubmit = async () => {
     if (!email.trim() || !password) {
@@ -36,14 +112,24 @@ export default function LoginScreen() {
     try {
       setSubmitting(true);
 
+      let user;
+
       if (mode === "login") {
-        await loginWithEmailPassword(email, password);
+        const u = await loginWithEmailPassword(email, password);
+        user = u;
       } else {
-        await registerWithEmailPassword(email, password);
+        const u = await registerWithEmailPassword(email, password);
+        user = u;
+
+        // Create base profile for new signups
+        await setDoc(doc(db, "users", user.uid), {
+          email,
+          role: null,
+          createdAt: serverTimestamp(),
+        });
       }
 
-      // Auth OK → go to role selection
-      router.replace("/onboarding/chooseRole" as any);
+      await handlePostLogin(user);
     } catch (e: any) {
       console.error(e);
       Alert.alert(
@@ -81,10 +167,9 @@ export default function LoginScreen() {
 
       if (Platform.OS === "web") {
         // Web: use Firebase popup
-        await loginWithGoogleWeb();
-        router.replace("/onboarding/chooseRole" as any);
+        const user = await loginWithGoogleWeb();
+        await handlePostLogin(user);
       } else {
-        // Native: not implemented yet
         Alert.alert(
           "Not available yet",
           "Google sign-in is currently implemented for web only."
@@ -186,7 +271,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Email/password submit */}
+        {/* Submit button */}
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={submitting}
@@ -240,7 +325,7 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Google button */}
+        {/* Google login */}
         <TouchableOpacity
           onPress={handleGoogle}
           disabled={googleLoading}

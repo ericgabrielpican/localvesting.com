@@ -27,7 +27,7 @@ import Button from "../../src/components/ui/Button";
 import { Theme } from "../../src/styles/Theme";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
-import LocationPickerModal from "../../src/components/LocationPickerModal";
+// import LocationPickerModal from "../../src/components/LocationPickerModal";
 
 interface Business {
   id: string;
@@ -449,7 +449,7 @@ export default function CreateCampaign() {
       </ScrollView>
 
       {/* OSM Location Picker */}
-      <LocationPickerModal
+      {/* <LocationPickerModal
         visible={locationModalVisible}
         address={campaignAddress}
         initialCoords={locationCoords}
@@ -461,7 +461,7 @@ export default function CreateCampaign() {
           });
           setLocationModalVisible(false);
         }}
-      />
+      /> */}
     </Screen>
   );
 }

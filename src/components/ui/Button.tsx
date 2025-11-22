@@ -1,55 +1,86 @@
+// src/components/ui/Button.tsx
 import React from "react";
-import { TouchableOpacity, Text, StyleSheet } from "react-native";
+import {
+  Pressable,
+  Text,
+  StyleSheet,
+  ViewStyle,
+  TextStyle,
+} from "react-native";
 import { Theme } from "../../styles/Theme";
+
+type Props = {
+  label: string;
+  onPress?: () => void;
+  variant?: "primary" | "secondary";
+  disabled?: boolean;
+  style?: ViewStyle;      // extra style for button
+  labelStyle?: TextStyle; // extra style for text
+};
 
 export default function Button({
   label,
   onPress,
   variant = "primary",
   disabled,
-}: {
-  label: string;
-  onPress?: () => void;
-  variant?: "primary" | "secondary";
-  disabled?: boolean;
-}) {
+  style,
+  labelStyle,
+}: Props) {
+  const isPrimary = variant === "primary";
+
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
-      style={[
+    <Pressable
+      onPress={disabled ? undefined : onPress}
+      style={({ pressed }) => [
         styles.base,
-        variant === "primary" ? styles.primary : styles.secondary,
-        disabled && { opacity: 0.7 },
+        isPrimary ? styles.primary : styles.secondary,
+        disabled && styles.disabled,
+        pressed && !disabled && styles.pressed,
+        style,
       ]}
     >
       <Text
         style={[
-          styles.text,
-          variant === "primary" ? styles.primaryText : styles.secondaryText,
+          styles.label,
+          !isPrimary && styles.labelSecondary,
+          labelStyle,
         ]}
       >
         {label}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: Theme.spacing.md,
-    borderRadius: Theme.radii.md,
+    minWidth: 140,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Theme.spacing.sm,
+    flexDirection: "row",
   },
-  primary: { backgroundColor: Theme.colors.primary },
+  primary: {
+    backgroundColor: Theme.colors.primary,
+  },
   secondary: {
-    backgroundColor: Theme.colors.surface,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
-  text: { fontSize: 14, fontWeight: "600" },
-  primaryText: { color: Theme.colors.primaryText },
-  secondaryText: { color: Theme.colors.text },
+  disabled: {
+    opacity: 0.5,
+  },
+  pressed: {
+    transform: [{ translateY: 1 }],
+  },
+  label: {
+    ...Theme.typography.label,
+    color: Theme.colors.primaryText,
+  },
+  labelSecondary: {
+    color: Theme.colors.text,
+  },
 });

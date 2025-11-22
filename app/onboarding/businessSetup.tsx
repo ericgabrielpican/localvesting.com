@@ -38,8 +38,8 @@ export default function BusinessSetup() {
       <Navbar />
       <View style={{ padding: Theme.spacing.lg }}>
         <Card>
-          <TextField label="Full name" value={name} onChangeText={setName} />
-          <TextField label="Phone" value={phone} onChangeText={setPhone} />
+          <TextField label="Full name" placeholder="Enter your full name…" value={name} onChangeText={setName} />
+          <TextField label="Phone number" placeholder="Enter your phone number..." value={phone} onChangeText={setPhone} />
           <Button label="Save & Continue" onPress={save} />
         </Card>
       </View>

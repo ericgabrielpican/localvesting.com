@@ -23,7 +23,7 @@ import Button from "../../src/components/ui/Button";
 import { Theme } from "../../src/styles/Theme";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
-import LocationPickerModal from "../../src/components/LocationPickerModal";
+// import LocationPickerModal from "../../src/components/LocationPickerModal";
 
 const CATEGORIES = [
   "Restaurant",
@@ -219,7 +219,7 @@ export default function AddBusiness() {
       </ScrollView>
 
       {/* OpenStreetMap location picker modal */}
-      <LocationPickerModal
+      {/* <LocationPickerModal
         visible={locationModalVisible}
         address={address}
         initialCoords={locationCoords}
@@ -231,7 +231,7 @@ export default function AddBusiness() {
           });
           setLocationModalVisible(false);
         }}
-      />
+      /> */}
     </Screen>
   );
 }

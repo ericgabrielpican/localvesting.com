@@ -20,6 +20,6 @@ export const Theme = {
     title: { fontSize: 20, fontWeight: "700" as const, color: "#111827" },
     subtitle: { fontSize: 14, color: "#6b7280" },
     body: { fontSize: 14, color: "#111827" },
-    label: { fontSize: 13, color: "#374151" },
+    label: { fontSize: 13, color: "#fff", fontWeight: "700" as const },
   },
 };
