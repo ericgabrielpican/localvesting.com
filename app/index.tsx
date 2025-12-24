@@ -37,67 +37,108 @@ export default function LandingPage() {
         {/* HERO */}
         <View style={styles.hero}>
           <View style={styles.heroText}>
-            <Text style={styles.badge}>Invest in what you can touch</Text>
+            <Text style={styles.badge}>
+              Invest where you live, not where you scroll.
+            </Text>
 
             <Text style={styles.title}>
-              Fund local restaurants, cafés and small businesses.
+              The easiest way to invest in local restaurants, cafés and small
+              businesses
             </Text>
 
             <Text style={styles.subtitle}>
-              LocalVesting is a revenue-share marketplace that lets you back
-              real businesses in your city and earn a fixed return from their
-              future revenue.
+              LocalVesting connects everyday investors with real businesses.
+              Fund growth, earn revenue-based returns, and support the places
+              you already care about.
             </Text>
 
             <View style={styles.heroButtons}>
               <Pressable style={styles.primaryButton} onPress={goPrimary}>
                 <Text style={styles.primaryButtonLabel}>
-                  {user ? "Go to marketplace" : "Get started"}
+                  {user ? "Go to marketplace" : "Start investing"}
                 </Text>
               </Pressable>
 
               <Pressable style={styles.secondaryButton} onPress={goLogin}>
                 <Text style={styles.secondaryButtonLabel}>
-                  Try the demo
+                  Let's use a demo
                 </Text>
               </Pressable>
             </View>
+          </View>
+        </View>
 
-            <Text style={styles.helperText}>
-              This is a demo environment for showcasing the platform – no real
-              investments are processed.
-            </Text>
+        {/* OUR STORY */}
+        <View style={styles.storySection}>
+          <Text style={styles.storyTitle}>What made us create LocalVesting</Text>
+
+          <Text style={styles.storyBody}>
+            Most investments today feel distant — numbers on a screen, companies
+            you never visit, growth you never see.
+          </Text>
+
+          <Text style={styles.storyBody}>
+            Meanwhile, the café on your corner or the restaurant you love if it wants to grow it has to 
+            raise money through banks, or wait too long to self finance.
+          </Text>
+
+<Text style={styles.storyBodyStrong}>
+           You can help change that.
+          </Text>
+
+          <Text style={styles.storyBodyStrong}>
+            LocalVesting was built to reconnect money with real places, real
+            people and real impact.
+          </Text>
+        </View>
+
+        {/* TRUST SIGNALS */}
+        <View style={styles.trustSection}>
+          <View style={styles.trustItem}>
+            <Text style={styles.trustNumber}>10+</Text>
+            <Text style={styles.trustLabel}>Businesses onboarded</Text>
+          </View>
+
+          <View style={styles.trustItem}>
+            <Text style={styles.trustNumber}>€50 000+</Text>
+            <Text style={styles.trustLabel}>Demo funding simulated</Text>
+          </View>
+
+          <View style={styles.trustItem}>
+            <Text style={styles.trustNumber}>4-8%</Text>
+            <Text style={styles.trustLabel}>Typical revenue share per campaign</Text>
           </View>
         </View>
 
         {/* HOW IT WORKS */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How LocalVesting works</Text>
+        <View style={[styles.section, styles.softSection]}>
+          <Text style={styles.sectionTitle}>How it works</Text>
 
           <View style={styles.cardsRow}>
             <View style={styles.card}>
+              <Text style={styles.cardIcon}>🏪</Text>
               <Text style={styles.cardTitle}>Browse campaigns</Text>
               <Text style={styles.cardBody}>
                 Discover vetted campaigns from local cafés, restaurants and
-                shops. Each campaign shows funding goal, APR, term and risk
-                level so you can quickly compare opportunities.
+                shops. Compare funding goals, terms and risk levels at a glance.
               </Text>
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Revenue-share lending</Text>
+              <Text style={styles.cardIcon}>📊</Text>
+              <Text style={styles.cardTitle}>Invest & earn</Text>
               <Text style={styles.cardBody}>
-                Investors fund a business in exchange for fixed repayments from
-                a share of future revenue – until principal + interest is fully
-                repaid.
+                Support businesses in exchange for revenue-based repayments or
+                perks — until your investment is fully repaid.
               </Text>
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Transparent dashboards</Text>
+              <Text style={styles.cardIcon}>🤝</Text>
+              <Text style={styles.cardTitle}>Grow YOUR community</Text>
               <Text style={styles.cardBody}>
-                Both investors and business owners get dashboards to track
-                campaigns, funding progress and status, all in one place.
+                Suggest new campaigns for businesses and earn alongside them! Help businesses launch, and earn bonuses
+                for growing your local businesses.
               </Text>
             </View>
           </View>
@@ -111,25 +152,22 @@ export default function LandingPage() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Investor experience</Text>
               <Text style={styles.cardBody}>
-                Sign up as an investor to browse sample campaigns, open detailed
-                views, and simulate pledges – without using real money.
+                Browse campaigns, create a portofolio and explore —
+                without using real money.
               </Text>
             </View>
 
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Business onboarding</Text>
               <Text style={styles.cardBody}>
-                Create a business account, fill in your profile, add a location
-                and request verification, just like a real merchant would.
+                Create a business profile, simulate campaign submissions and suitable funding structures.
               </Text>
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Support & admin tools</Text>
+              <Text style={styles.cardTitle}>Campaign creation</Text>
               <Text style={styles.cardBody}>
-                Test the support center, open tickets, and (as an admin) respond
-                to them, close them, and manage business verification and
-                campaigns.
+                Test campaign templates from our dedicated marketplace, pre-create your own campaigns before posting them. 
               </Text>
             </View>
           </View>
@@ -137,7 +175,14 @@ export default function LandingPage() {
 
         {/* CTA FOOTER */}
         <View style={styles.footerSection}>
-          <Text style={styles.footerTitle}>Ready to see it in action?</Text>
+          <Text style={styles.footerTitle}>
+            Build wealth exactly where you live
+          </Text>
+
+          <Text style={styles.footerSubtitle}>
+            Join our demo and explore how you can make an impact and care about your future.
+          </Text>
+
           <View style={styles.heroButtons}>
             <Pressable style={styles.primaryButton} onPress={goPrimary}>
               <Text style={styles.primaryButtonLabel}>
@@ -155,6 +200,8 @@ export default function LandingPage() {
   );
 }
 
+/* ---------------- STYLES ---------------- */
+
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Theme.spacing.lg,
@@ -164,13 +211,14 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
   },
+
   hero: {
     flexDirection: "row",
-    gap: Theme.spacing.lg,
   },
   heroText: {
     flex: 1,
   },
+
   badge: {
     fontSize: 12,
     fontWeight: "600",
@@ -182,25 +230,29 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     marginBottom: 10,
   },
+
   title: {
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: "700",
     color: Theme.colors.text,
     marginBottom: 10,
   },
+
   subtitle: {
-    fontSize: 15,
-    color: Theme.colors.textSubtle,
-    marginBottom: 16,
+    fontSize: 16,
+    color: "#374151",
+    marginBottom: 18,
+    lineHeight: 22,
   },
+
   heroButtons: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 8,
   },
+
   primaryButton: {
     backgroundColor: Theme.colors.primary,
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 999,
   },
@@ -209,10 +261,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
+
   secondaryButton: {
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 999,
     backgroundColor: Theme.colors.surface,
@@ -222,22 +275,73 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     fontSize: 14,
   },
-  helperText: {
-    fontSize: 12,
-    color: Theme.colors.textMuted,
+
+  storySection: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 24,
+    padding: Theme.spacing.lg,
+    gap: 10,
+  },
+  storyTitle: {
+    ...Theme.typography.title,
+  },
+  storyBody: {
+    fontSize: 14,
+    color: "#4B5563",
+    lineHeight: 20,
+  },
+  storyBodyStrong: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1F2937",
+    lineHeight: 22,
     marginTop: 4,
   },
+
+  trustSection: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: Theme.spacing.md,
+  },
+  trustItem: {
+    flex: 1,
+    backgroundColor: Theme.colors.surface,
+    borderRadius: 16,
+    padding: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    alignItems: "center",
+  },
+  trustNumber: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Theme.colors.primary,
+  },
+  trustLabel: {
+    fontSize: 12,
+    color: "#4B5563",
+    marginTop: 4,
+  },
+
   section: {
     gap: Theme.spacing.md,
   },
+  softSection: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 24,
+    padding: Theme.spacing.lg,
+  },
+
   sectionTitle: {
     ...Theme.typography.title,
   },
+
   cardsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Theme.spacing.md,
   },
+
   card: {
     flexBasis: "32%",
     minWidth: 260,
@@ -248,23 +352,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
+
+  cardIcon: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+
   cardTitle: {
     fontWeight: "600",
     fontSize: 15,
     marginBottom: 6,
   },
+
   cardBody: {
-    fontSize: 13,
-    color: Theme.colors.textSubtle,
+    fontSize: 14,
+    color: "#4B5563",
+    lineHeight: 20,
   },
+
   footerSection: {
-    alignItems: "flex-start",
     paddingVertical: Theme.spacing.lg,
     borderTopWidth: 1,
     borderTopColor: Theme.colors.border,
     gap: Theme.spacing.sm,
   },
+
   footerTitle: {
     ...Theme.typography.title,
+  },
+
+  footerSubtitle: {
+    fontSize: 14,
+    color: "#4B5563",
+    marginBottom: 8,
   },
 });

@@ -33,6 +33,7 @@ type Business = {
   category?: string;
   verified?: boolean;
   createdAt?: any;
+  verificationStatus?: "pending" | "verified" | "rejected";
 };
 
 export default function MyBusinessesScreen() {
@@ -94,10 +95,14 @@ export default function MyBusinessesScreen() {
       label = "Verified";
       bg = "#DCFCE7";
       color = "#166534";
-    } else if (b.verified === false) {
+    } else if (b.verified === false && b.verificationStatus === "verified") {
       label = "Rejected";
       bg = "#FEE2E2";
       color = "#991B1B";
+    } else if (b.verified === false && b.verificationStatus === "pending") {
+      label = "Pending";
+      bg = "#FEF3C7";
+      color = "#f2ff00ff";
     }
 
     return (

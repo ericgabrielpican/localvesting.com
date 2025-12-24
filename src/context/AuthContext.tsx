@@ -12,9 +12,13 @@ import { subscribeToAuth } from "../firebase/auth";
 
 interface AuthContextValue {
   user: User | null;
+  loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextValue>({ user: null });
+const AuthContext = createContext<AuthContextValue>({
+  user: null,
+  loading: true,
+});
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -24,27 +28,28 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsub = subscribeToAuth((firebaseUser) => {
       setUser(firebaseUser);
-      setChecking(false);
+      setLoading(false);
     });
     return unsub;
   }, []);
 
-  if (checking) {
+  // Keep the global “spinner while checking auth” behavior
+  if (loading) {
     return (
-      <View
-        style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-      >
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator />
       </View>
     );
   }
 
   return (
-    <AuthContext.Provider value={{ user }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading }}>
+      {children}
+    </AuthContext.Provider>
   );
 };

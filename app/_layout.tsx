@@ -1,22 +1,30 @@
 // app/_layout.tsx
-import React, { ReactNode, useEffect } from "react";
+import React, { ReactNode, useEffect, useMemo } from "react";
 import { Stack, usePathname, useRouter } from "expo-router";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 
 function AuthGate({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   // Public routes that don't require authentication
-  const isPublicRoute = pathname === "/login" || pathname === "/";
+  const isPublicRoute = useMemo(() => {
+    if (pathname === "/") return true;
+    if (pathname.startsWith("/about")) return true;
+    if (pathname.startsWith("/login")) return true;
+    return false;
+  }, [pathname]);
 
   useEffect(() => {
-    // If not logged in and trying to access a protected page → go to login
+    // Wait until Firebase auth finishes initializing
+    if (loading) return;
+
+    // If user is not logged in and route is protected → redirect to login
     if (!user && !isPublicRoute) {
       router.replace("/login" as any);
     }
-  }, [user, isPublicRoute, router]);
+  }, [user, loading, isPublicRoute, router]);
 
   return <>{children}</>;
 }
