@@ -7,6 +7,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "extra": {
+    
+      "APP_BASE_URL": "demodev.localvesting.com"
+    },
     "plugins": [
       "expo-router",
       "expo-web-browser"

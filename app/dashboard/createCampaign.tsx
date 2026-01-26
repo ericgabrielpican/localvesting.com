@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -24,10 +25,12 @@ import Card from "../../src/components/ui/Card";
 import Navbar from "../../src/components/Navbar";
 import TextField from "../../src/components/ui/TextField";
 import Button from "../../src/components/ui/Button";
+import LocationPickerModal, {
+  PickedLocation,
+} from "../../src/components/LocationPickerModal";
 import { Theme } from "../../src/styles/Theme";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
-// import LocationPickerModal from "../../src/components/LocationPickerModal";
 
 interface Business {
   id: string;
@@ -49,6 +52,14 @@ const RISK_LEVELS = ["Low", "Medium", "High"];
 export default function CreateCampaign() {
   const router = useRouter();
   const { user } = useAuth();
+
+  const notify = (title: string, message: string) => {
+    if (Platform.OS === "web") {
+      window.alert(`${title}\n\n${message}`);
+      return;
+    }
+    Alert.alert(title, message);
+  };
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loadingBusinesses, setLoadingBusinesses] = useState(true);
@@ -74,7 +85,7 @@ export default function CreateCampaign() {
 
   const [submitting, setSubmitting] = useState(false);
 
-  // NEW: location state
+  // 📍 location
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [locationCoords, setLocationCoords] = useState<{
     latitude: number;
@@ -103,40 +114,45 @@ export default function CreateCampaign() {
         if (list.length > 0) setBusinessId(list[0].id);
       } catch (e) {
         console.error(e);
-        Alert.alert("Error", "Could not load businesses");
+        notify("Error", "Could not load businesses");
       } finally {
         setLoadingBusinesses(false);
       }
     };
 
     loadBusinesses();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
 
   const selectedBusiness = businesses.find((b) => b.id === businessId);
 
   const validate = () => {
     if (!selectedBusiness) {
-      Alert.alert("Business required", "Please select a verified business.");
+      notify("Business required", "Please select a verified business.");
       return false;
     }
     if (!title.trim()) {
-      Alert.alert("Title required", "Please enter a campaign title.");
+      notify("Title required", "Please enter a campaign title.");
       return false;
     }
     if (!desc.trim()) {
-      Alert.alert("Description required", "Please describe the campaign.");
+      notify("Description required", "Please describe the campaign.");
       return false;
     }
     if (!campaignAddress.trim()) {
-      Alert.alert("Address required", "Please enter the campaign address.");
+      notify("Address required", "Please pick a location (it will fill the address).");
+      return false;
+    }
+    if (!locationCoords) {
+      notify("Location required", "Please place the campaign pin on the map.");
       return false;
     }
     if (!category) {
-      Alert.alert("Category required", "Please select a category.");
+      notify("Category required", "Please select a category.");
       return false;
     }
     if (!riskLevel) {
-      Alert.alert("Risk level required", "Please select a risk level.");
+      notify("Risk level required", "Please select a risk level.");
       return false;
     }
 
@@ -146,32 +162,23 @@ export default function CreateCampaign() {
     const termNum = Number(termMonths);
 
     if (!goalNum || goalNum <= 0) {
-      Alert.alert("Invalid goal", "Funding goal must be a positive number.");
+      notify("Invalid goal", "Funding goal must be a positive number.");
       return false;
     }
     if (!minNum || minNum <= 0) {
-      Alert.alert(
-        "Invalid minimum",
-        "Minimum investment must be a positive number."
-      );
+      notify("Invalid minimum", "Minimum investment must be a positive number.");
       return false;
     }
     if (!aprNum || aprNum <= 0) {
-      Alert.alert(
-        "Invalid APR",
-        "Interest rate (APR) must be a positive number."
-      );
+      notify("Invalid APR", "Interest rate (APR) must be a positive number.");
       return false;
     }
     if (!termNum || termNum <= 0) {
-      Alert.alert(
-        "Invalid loan term",
-        "Loan term must be a positive number of months."
-      );
+      notify("Invalid loan term", "Loan term must be a positive number of months.");
       return false;
     }
     if (!deadline.trim()) {
-      Alert.alert("Deadline required", "Please enter a campaign deadline.");
+      notify("Deadline required", "Please enter a campaign deadline.");
       return false;
     }
 
@@ -180,19 +187,15 @@ export default function CreateCampaign() {
 
   const createCampaign = async () => {
     if (!user) {
-      Alert.alert("Not logged in", "Please log in again.");
+      notify("Not logged in", "Please log in again.");
       return;
     }
-
     if (!validate()) return;
+
+    const coords = locationCoords!;
 
     try {
       setSubmitting(true);
-
-      const goalNum = Number(goal);
-      const minNum = Number(minInvestment);
-      const aprNum = Number(apr);
-      const termNum = Number(termMonths);
 
       await addDoc(collection(db, "campaigns"), {
         ownerId: user.uid,
@@ -203,36 +206,31 @@ export default function CreateCampaign() {
         address: campaignAddress.trim(),
         category,
         riskLevel,
-        goal: goalNum,
-        minInvestment: minNum,
-        apr: aprNum,
-        termMonths: termNum,
+        goal: Number(goal),
+        minInvestment: Number(minInvestment),
+        apr: Number(apr),
+        termMonths: Number(termMonths),
         deadline: deadline.trim(),
         imageUrl: imageUrl.trim() || null,
         status: "active",
         raised: 0,
-        location: locationCoords
-          ? {
-              latitude: locationCoords.latitude,
-              longitude: locationCoords.longitude,
-            }
-          : null,
+
+        location: { lat: coords.latitude, lng: coords.longitude },
+        locationSource: "manual",
+        locationUpdatedAt: serverTimestamp(),
+
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      Alert.alert("Success", "Campaign created.");
+      notify("Success", "Campaign created.");
       router.replace("/dashboard" as any);
     } catch (e: any) {
       console.error(e);
-      Alert.alert("Error", e?.message ?? "Could not create campaign.");
+      notify("Error", e?.message ?? "Could not create campaign.");
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const cancel = () => {
-    router.back();
   };
 
   return (
@@ -245,9 +243,6 @@ export default function CreateCampaign() {
 
           {/* SELECT BUSINESS */}
           <Text style={styles.label}>Select Business *</Text>
-          <Text style={styles.helper}>
-            Choose which verified business is posting this campaign
-          </Text>
 
           {loadingBusinesses ? (
             <View style={styles.rowCenter}>
@@ -255,8 +250,7 @@ export default function CreateCampaign() {
             </View>
           ) : businesses.length === 0 ? (
             <Text style={styles.warning}>
-              You have no verified businesses. Please add a business and wait
-              for verification before creating a campaign.
+              You have no verified businesses. Please add a business and wait for verification before creating a campaign.
             </Text>
           ) : (
             <View style={{ marginBottom: Theme.spacing.md }}>
@@ -267,13 +261,12 @@ export default function CreateCampaign() {
                 <Text style={styles.dropdownText}>
                   {selectedBusiness
                     ? `${selectedBusiness.name}${
-                        selectedBusiness.address
-                          ? " – " + selectedBusiness.address
-                          : ""
+                        selectedBusiness.address ? " – " + selectedBusiness.address : ""
                       }`
                     : "Select business"}
                 </Text>
               </TouchableOpacity>
+
               {businessDropdownOpen && (
                 <View style={styles.dropdownList}>
                   {businesses.map((b) => (
@@ -296,7 +289,6 @@ export default function CreateCampaign() {
             </View>
           )}
 
-          {/* TITLE */}
           <TextField
             label="Campaign Title *"
             placeholder="e.g., Expand Our Manufacturing Facility"
@@ -304,7 +296,6 @@ export default function CreateCampaign() {
             onChangeText={setTitle}
           />
 
-          {/* DESCRIPTION */}
           <TextField
             label="Description *"
             placeholder="Describe what you'll use the funds for..."
@@ -314,20 +305,29 @@ export default function CreateCampaign() {
             style={{ height: 100, textAlignVertical: "top" }}
           />
 
-          {/* ADDRESS + FIND */}
+          {/* Address is auto-filled from the map */}
           <TextField
             label="Campaign Address *"
-            placeholder="Enter campaign/project address..."
+            placeholder="Pick on map to fill address..."
             value={campaignAddress}
             onChangeText={setCampaignAddress}
           />
 
+          {/* Location status */}
+          <View style={styles.locationRow}>
+            <View
+              style={[
+                styles.dot,
+                { backgroundColor: locationCoords ? "#16a34a" : "#ef4444" },
+              ]}
+            />
+            <Text style={styles.locationText}>
+              {locationCoords ? "Location selected" : "No location selected"}
+            </Text>
+          </View>
+
           <Button
-            label={
-              locationCoords
-                ? "Adjust Pin Location on Map"
-                : "Find on Map (OpenStreetMap)"
-            }
+            label={locationCoords ? "Adjust Location on Map" : "Pick Location on Map"}
             variant="secondary"
             onPress={() => setLocationModalVisible(true)}
           />
@@ -338,10 +338,9 @@ export default function CreateCampaign() {
             style={styles.dropdown}
             onPress={() => setCategoryOpen((v) => !v)}
           >
-            <Text style={styles.dropdownText}>
-              {category ?? "Select category"}
-            </Text>
+            <Text style={styles.dropdownText}>{category ?? "Select category"}</Text>
           </TouchableOpacity>
+
           {categoryOpen && (
             <View style={styles.dropdownList}>
               {CATEGORIES.map((c) => (
@@ -359,18 +358,15 @@ export default function CreateCampaign() {
             </View>
           )}
 
-          {/* RISK LEVEL */}
-          <Text style={[styles.label, { marginTop: Theme.spacing.md }]}>
-            Risk Level *
-          </Text>
+          {/* RISK */}
+          <Text style={[styles.label, { marginTop: Theme.spacing.md }]}>Risk Level *</Text>
           <TouchableOpacity
             style={styles.dropdown}
             onPress={() => setRiskOpen((v) => !v)}
           >
-            <Text style={styles.dropdownText}>
-              {riskLevel ?? "Select risk level"}
-            </Text>
+            <Text style={styles.dropdownText}>{riskLevel ?? "Select risk level"}</Text>
           </TouchableOpacity>
+
           {riskOpen && (
             <View style={styles.dropdownList}>
               {RISK_LEVELS.map((r) => (
@@ -417,16 +413,12 @@ export default function CreateCampaign() {
             onChangeText={setTermMonths}
             keyboardType="numeric"
           />
-
-          {/* DEADLINE */}
           <TextField
             label="Campaign Deadline *"
             placeholder="mm/dd/yyyy"
             value={deadline}
             onChangeText={setDeadline}
           />
-
-          {/* IMAGE URL */}
           <TextField
             label="Campaign Image (URL)"
             placeholder="Paste image URL (optional)"
@@ -434,34 +426,29 @@ export default function CreateCampaign() {
             onChangeText={setImageUrl}
           />
 
-          {/* ACTIONS */}
           <View style={styles.actions}>
-            <Button label="Cancel" variant="secondary" onPress={cancel} />
+            <Button label="Cancel" variant="secondary" onPress={() => router.back()} />
             <Button
               label={submitting ? "Creating..." : "Create Campaign"}
               onPress={createCampaign}
-              disabled={
-                submitting || loadingBusinesses || businesses.length === 0
-              }
+              disabled={submitting || loadingBusinesses || businesses.length === 0}
             />
           </View>
         </Card>
       </ScrollView>
 
-      {/* OSM Location Picker */}
-      {/* <LocationPickerModal
+      {/* ✅ Modal */}
+      <LocationPickerModal
         visible={locationModalVisible}
         address={campaignAddress}
         initialCoords={locationCoords}
         onClose={() => setLocationModalVisible(false)}
-        onConfirm={(data) => {
-          setLocationCoords({
-            latitude: data.latitude,
-            longitude: data.longitude,
-          });
+        onConfirm={(data: PickedLocation) => {
+          setLocationCoords({ latitude: data.latitude, longitude: data.longitude });
+          if (data.address) setCampaignAddress(data.address); // ✅ auto-fill from pin
           setLocationModalVisible(false);
         }}
-      /> */}
+      />
     </Screen>
   );
 }
@@ -474,24 +461,19 @@ const styles = StyleSheet.create({
   heading: {
     ...Theme.typography.title,
     marginBottom: Theme.spacing.lg,
+    color: "#000",
   },
   label: {
     ...Theme.typography.label,
     marginBottom: Theme.spacing.xs,
-  },
-  helper: {
-    ...Theme.typography.subtitle,
-    marginBottom: Theme.spacing.sm,
+    color: "#000",
   },
   warning: {
     ...Theme.typography.subtitle,
     color: Theme.colors.danger,
     marginBottom: Theme.spacing.md,
   },
-  rowCenter: {
-    alignItems: "center",
-    marginBottom: Theme.spacing.md,
-  },
+  rowCenter: { alignItems: "center", marginBottom: Theme.spacing.md },
   dropdown: {
     borderWidth: 1,
     borderColor: Theme.colors.border,
@@ -500,9 +482,7 @@ const styles = StyleSheet.create({
     paddingVertical: Theme.spacing.sm,
     backgroundColor: Theme.colors.surface,
   },
-  dropdownText: {
-    ...Theme.typography.body,
-  },
+  dropdownText: { ...Theme.typography.body, color: "#000" },
   dropdownList: {
     borderWidth: 1,
     borderColor: Theme.colors.border,
@@ -517,10 +497,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Theme.colors.border,
   },
-  dropdownItemText: {
-    ...Theme.typography.body,
-  },
+  dropdownItemText: { ...Theme.typography.body, color: "#000" },
   actions: {
     marginTop: Theme.spacing.lg,
+    gap: Theme.spacing.sm,
   },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginVertical: 8,
+  },
+  dot: { width: 10, height: 10, borderRadius: 999 },
+  locationText: { ...Theme.typography.subtitle, color: "#000" },
 });

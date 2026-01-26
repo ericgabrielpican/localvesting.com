@@ -26,6 +26,8 @@ import Screen from "../../src/components/ui/Screen";
 import Card from "../../src/components/ui/Card";
 import { Theme } from "../../src/styles/Theme";
 
+import { isEmailVerified, resendEmailVerification } from "../../src/firebase/auth";
+
 type Business = {
   id: string;
   name: string;
@@ -42,6 +44,13 @@ export default function MyBusinessesScreen() {
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Email verification status UI state (auto-updates)
+  const [emailVerified, setEmailVerified] = useState<boolean>(false);
+  const [checkingEmail, setCheckingEmail] = useState<boolean>(true);
+  const [resending, setResending] = useState<boolean>(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailInfo, setEmailInfo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -67,6 +76,7 @@ export default function MyBusinessesScreen() {
             category: data.category,
             verified: data.verified,
             createdAt: data.createdAt,
+            verificationStatus: data.verificationStatus,
           };
         });
 
@@ -82,6 +92,72 @@ export default function MyBusinessesScreen() {
     return unsub;
   }, [user?.uid]);
 
+  // Initial check when screen loads / user changes
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        setCheckingEmail(true);
+        setEmailError(null);
+        setEmailInfo(null);
+
+        if (!user) {
+          if (!alive) return;
+          setEmailVerified(false);
+          return;
+        }
+
+        const v = await isEmailVerified();
+        if (!alive) return;
+        setEmailVerified(v);
+      } catch (e: any) {
+        if (!alive) return;
+        setEmailError(e?.message ?? "Failed to check email verification status");
+      } finally {
+        if (!alive) return;
+        setCheckingEmail(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [user?.uid]);
+
+  // Auto-refresh every 10s until verified
+  useEffect(() => {
+    if (!user) return;
+    if (emailVerified) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const v = await isEmailVerified();
+        setEmailVerified(v);
+        if (v) setEmailInfo("Email verified ✅");
+      } catch {
+        // silent: avoid spamming UI with polling errors
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [user?.uid, emailVerified]);
+
+  const handleResendVerification = async () => {
+    try {
+      setResending(true);
+      setEmailError(null);
+      setEmailInfo(null);
+
+      await resendEmailVerification();
+      setEmailInfo("Verification email sent. Check inbox/spam.");
+    } catch (e: any) {
+      setEmailError(e?.message ?? "Failed to resend verification email");
+    } finally {
+      setResending(false);
+    }
+  };
+
   const goToAddBusiness = () => {
     router.push("/dashboard/addBusiness");
   };
@@ -95,14 +171,14 @@ export default function MyBusinessesScreen() {
       label = "Verified";
       bg = "#DCFCE7";
       color = "#166534";
-    } else if (b.verified === false && b.verificationStatus === "verified") {
+    } else if (b.verified === false && b.verificationStatus === "rejected") {
       label = "Rejected";
       bg = "#FEE2E2";
       color = "#991B1B";
     } else if (b.verified === false && b.verificationStatus === "pending") {
       label = "Pending";
       bg = "#FEF3C7";
-      color = "#f2ff00ff";
+      color = "#92400E";
     }
 
     return (
@@ -135,9 +211,46 @@ export default function MyBusinessesScreen() {
           Manage your business profiles and verification status
         </Text>
 
-        {/* ------------------------------------------------ */}
-        {/* EMPTY STATE — WITH YOUR BIG BUTTON               */}
-        {/* ------------------------------------------------ */}
+        {/* EMAIL VERIFICATION STATUS (AUTO) */}
+        {!!user && (
+          <View style={styles.verifyBox}>
+            <View style={styles.verifyRow}>
+              <View
+                style={[
+                  styles.dot,
+                  { backgroundColor: emailVerified ? "#22C55E" : "#EF4444" },
+                ]}
+              />
+              <Text style={styles.verifyText}>
+                {checkingEmail
+                  ? "Checking email verification..."
+                  : emailVerified
+                  ? "Email verified"
+                  : "Email not verified"}
+              </Text>
+
+              {!emailVerified && (
+                <Pressable
+                  style={[
+                    styles.resendButtonInline,
+                    (resending || checkingEmail) && { opacity: 0.6 },
+                  ]}
+                  onPress={handleResendVerification}
+                  disabled={resending || checkingEmail}
+                >
+                  <Text style={styles.resendButtonInlineLabel}>
+                    {resending ? "Sending..." : "Resend email"}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            {!!emailInfo && <Text style={styles.infoText}>{emailInfo}</Text>}
+            {!!emailError && <Text style={styles.errorText}>{emailError}</Text>}
+          </View>
+        )}
+
+        {/* EMPTY STATE — WITH YOUR BIG BUTTON */}
         {!hasBusinesses && (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyTitle}>No businesses yet</Text>
@@ -151,9 +264,7 @@ export default function MyBusinessesScreen() {
           </View>
         )}
 
-        {/* ------------------------------------------------ */}
-        {/* BUSINESS LIST                                     */}
-        {/* ------------------------------------------------ */}
+        {/* BUSINESS LIST */}
         {hasBusinesses && (
           <>
             <View style={styles.listHeader}>
@@ -209,6 +320,49 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.lg,
   },
 
+  /* EMAIL VERIFICATION BOX */
+  verifyBox: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    borderColor: Theme.colors.border,
+    borderWidth: 1,
+    gap: 10,
+  },
+  verifyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  verifyText: {
+    ...Theme.typography.body,
+  },
+  resendButtonInline: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: Theme.colors.primary,
+    borderRadius: 10,
+    marginLeft: "auto",
+  },
+  resendButtonInlineLabel: {
+    ...Theme.typography.label,
+    color: "#fff",
+  },
+  infoText: {
+    ...Theme.typography.body,
+    color: Theme.colors.textSubtle,
+  },
+  errorText: {
+    ...Theme.typography.body,
+    color: "#B91C1C",
+  },
+
   /* EMPTY BOX WITH BIG BUTTON */
   emptyBox: {
     backgroundColor: "#fff",
@@ -262,6 +416,7 @@ const styles = StyleSheet.create({
   },
   smallAddButtonLabel: {
     ...Theme.typography.label,
+    color: "#fff",
   },
 
   /* BUSINESS CARDS */

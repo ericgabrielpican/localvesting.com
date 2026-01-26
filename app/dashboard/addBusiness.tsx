@@ -7,23 +7,20 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 import Screen from "../../src/components/ui/Screen";
 import Card from "../../src/components/ui/Card";
 import Navbar from "../../src/components/Navbar";
 import TextField from "../../src/components/ui/TextField";
 import Button from "../../src/components/ui/Button";
+import LocationPickerModal from "../../src/components/LocationPickerModal";
 import { Theme } from "../../src/styles/Theme";
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
-// import LocationPickerModal from "../../src/components/LocationPickerModal";
 
 const CATEGORIES = [
   "Restaurant",
@@ -40,6 +37,15 @@ export default function AddBusiness() {
   const router = useRouter();
   const { user } = useAuth();
 
+  const notify = (title: string, message: string) => {
+    if (Platform.OS === "web") {
+      // RN Alert can be flaky on web; this is guaranteed visible
+      window.alert(`${title}\n\n${message}`);
+      return;
+    }
+    Alert.alert(title, message);
+  };
+
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -50,7 +56,7 @@ export default function AddBusiness() {
 
   const [saving, setSaving] = useState(false);
 
-  // map / location state
+  // 📍 LOCATION STATE
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [locationCoords, setLocationCoords] = useState<{
     latitude: number;
@@ -59,30 +65,39 @@ export default function AddBusiness() {
 
   const validate = () => {
     if (!name.trim()) {
-      Alert.alert("Business name required", "Please enter a business name.");
+      notify("Business name required", "Please enter a business name.");
       return false;
     }
     if (!category) {
-      Alert.alert("Category required", "Please select a business category.");
+      notify("Category required", "Please select a business category.");
       return false;
     }
     if (!phone.trim()) {
-      Alert.alert("Phone required", "Please enter a phone number.");
+      notify("Phone required", "Please enter a phone number.");
       return false;
     }
     if (!address.trim()) {
-      Alert.alert("Address required", "Please enter the business address.");
+      notify("Address required", "Please enter the business address.");
+      return false;
+    }
+    if (!locationCoords) {
+      notify("Location required", "Please place your business on the map.");
       return false;
     }
     return true;
   };
 
   const handleSave = async () => {
+    console.log("Create Business pressed"); // helps you confirm button is firing
+
     if (!user) {
-      Alert.alert("Not logged in", "Please log in again.");
+      notify("Not logged in", "Please log in again.");
       return;
     }
     if (!validate()) return;
+
+    // ✅ TypeScript-safe (validated above)
+    const coords = locationCoords!;
 
     try {
       setSaving(true);
@@ -95,27 +110,31 @@ export default function AddBusiness() {
         phone: phone.trim(),
         address: address.trim(),
         logoUrl: logoUrl.trim() || null,
-        location: locationCoords
-          ? {
-              latitude: locationCoords.latitude,
-              longitude: locationCoords.longitude,
-            }
-          : null,
+
+        // 📍 MAP LOCATION
+        location: {
+          lat: coords.latitude,
+          lng: coords.longitude,
+        },
+        locationSource: "manual",
+        locationUpdatedAt: serverTimestamp(),
+
         // verification flags
         verified: false,
         verificationStatus: "pending",
+
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      Alert.alert(
+      notify(
         "Business added",
         "Your business has been created and sent for verification."
       );
       router.replace("/dashboard" as any);
     } catch (e: any) {
       console.error(e);
-      Alert.alert("Error", e?.message ?? "Could not save business.");
+      notify("Error", e?.message ?? "Could not save business.");
     } finally {
       setSaving(false);
     }
@@ -147,7 +166,7 @@ export default function AddBusiness() {
             style={{ height: 100, textAlignVertical: "top" }}
           />
 
-          {/* CATEGORY DROPDOWN */}
+          {/* CATEGORY */}
           <Text style={styles.label}>Category *</Text>
           <TouchableOpacity
             style={styles.dropdown}
@@ -182,20 +201,22 @@ export default function AddBusiness() {
             keyboardType="phone-pad"
           />
 
-          {/* ADDRESS + FIND (OSM MAP) */}
-          <TextField
-            label="Business Address *"
-            placeholder="Cluj-Napoca, Romania"
-            value={address}
-            onChangeText={setAddress}
-          />
+   
+          {/* 📍 LOCATION STATUS */}
+          <View style={styles.locationRow}>
+            <View
+              style={[
+                styles.dot,
+                { backgroundColor: locationCoords ? "#16a34a" : "#ef4444" },
+              ]}
+            />
+            <Text style={styles.locationText}>
+              {locationCoords ? "Location selected" : "No location selected"}
+            </Text>
+          </View>
 
           <Button
-            label={
-              locationCoords
-                ? "Adjust Pin Location on Map"
-                : "Find on Map (OpenStreetMap)"
-            }
+            label={locationCoords ? "Adjust Location on Map" : "Pick Location on Map"}
             variant="secondary"
             onPress={() => setLocationModalVisible(true)}
           />
@@ -218,20 +239,21 @@ export default function AddBusiness() {
         </Card>
       </ScrollView>
 
-      {/* OpenStreetMap location picker modal */}
-      {/* <LocationPickerModal
-        visible={locationModalVisible}
-        address={address}
-        initialCoords={locationCoords}
-        onClose={() => setLocationModalVisible(false)}
-        onConfirm={(data) => {
-          setLocationCoords({
-            latitude: data.latitude,
-            longitude: data.longitude,
-          });
-          setLocationModalVisible(false);
-        }}
-      /> */}
+   <LocationPickerModal
+  visible={locationModalVisible}
+  address={address}
+  initialCoords={locationCoords}
+  onClose={() => setLocationModalVisible(false)}
+  onConfirm={(data) => {
+    setLocationCoords({ latitude: data.latitude, longitude: data.longitude });
+
+    // ✅ auto-fill address from pin
+    if (data.address) setAddress(data.address);
+
+    setLocationModalVisible(false);
+  }}
+/>
+
     </Screen>
   );
 }
@@ -244,10 +266,12 @@ const styles = StyleSheet.create({
   heading: {
     ...Theme.typography.title,
     marginBottom: Theme.spacing.lg,
+    color: "#000",
   },
   label: {
     ...Theme.typography.label,
     marginBottom: Theme.spacing.xs,
+    color: "#000", // ✅ black label above dropdown
   },
   dropdown: {
     borderWidth: 1,
@@ -260,6 +284,7 @@ const styles = StyleSheet.create({
   },
   dropdownText: {
     ...Theme.typography.body,
+    color: "#000",
   },
   dropdownList: {
     borderWidth: 1,
@@ -276,8 +301,24 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     ...Theme.typography.body,
+    color: "#000",
   },
   actions: {
     marginTop: Theme.spacing.lg,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginVertical: 8,
+  },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  locationText: {
+    ...Theme.typography.subtitle,
+    color: "#000",
   },
 });
