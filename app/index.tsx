@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import Screen from "../src/components/ui/Screen";
-import NavBar from "../src/components/Navbar";
 import { Theme } from "../src/styles/Theme";
 import { useAuth } from "../src/context/AuthContext";
 
@@ -31,7 +30,6 @@ export default function LandingPage() {
 
   return (
     <Screen>
-      <NavBar />
 
       <ScrollView contentContainerStyle={styles.container}>
         {/* HERO */}

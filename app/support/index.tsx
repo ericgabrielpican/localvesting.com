@@ -24,7 +24,6 @@ import {
 
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
-import NavBar from "../../src/components/Navbar";
 import Screen from "../../src/components/ui/Screen";
 import Button from "../../src/components/ui/Button";
 import { Theme } from "../../src/styles/Theme";
@@ -284,7 +283,6 @@ const handleSendMessage = useCallback(async () => {
   if (!user) {
     return (
       <Screen>
-        <NavBar />
         <View style={styles.center}>
           <Text style={Theme.typography.title}>Support</Text>
           <Text style={styles.muted}>
@@ -297,7 +295,6 @@ const handleSendMessage = useCallback(async () => {
 
   return (
     <Screen>
-      <NavBar />
 
       <View style={styles.page}>
         {/* Header row */}

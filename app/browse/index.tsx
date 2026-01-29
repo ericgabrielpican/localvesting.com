@@ -13,7 +13,6 @@ import { useRouter } from "expo-router";
 import { collection, getDocs } from "firebase/firestore";
 
 import { db } from "../../src/firebase/config";
-import NavBar from "../../src/components/Navbar";
 import CampaignCard from "../../src/components/CampaignCard";
 import { Theme } from "../../src/styles/Theme";
 
@@ -91,7 +90,6 @@ const BrowseScreen: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      <NavBar active="browse" />
 
       <ScrollView
         style={styles.scroll}

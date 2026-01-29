@@ -21,7 +21,6 @@ import {
 import { db } from "../../src/firebase/config";
 import { useAuth } from "../../src/context/AuthContext";
 
-import NavBar from "../../src/components/Navbar";
 import Screen from "../../src/components/ui/Screen";
 import Card from "../../src/components/ui/Card";
 import { Theme } from "../../src/styles/Theme";
@@ -191,7 +190,6 @@ export default function MyBusinessesScreen() {
   if (loading) {
     return (
       <Screen>
-        <NavBar />
         <View style={styles.center}>
           <ActivityIndicator />
         </View>
@@ -203,7 +201,6 @@ export default function MyBusinessesScreen() {
 
   return (
     <Screen>
-      <NavBar />
 
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.pageTitle}>My Businesses</Text>

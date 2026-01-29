@@ -4,7 +4,6 @@ import { useLocalSearchParams } from "expo-router";
 import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../src/firebase/config";
 
-import Navbar from "../../src/components/Navbar";
 import Screen from "../../src/components/ui/Screen";
 import Card from "../../src/components/ui/Card";
 import Button from "../../src/components/ui/Button";
@@ -52,7 +51,6 @@ export default function CampaignDetail() {
   if (loading)
     return (
       <Screen>
-        <Navbar />
         <View style={styles.center}>
           <ActivityIndicator />
         </View>
@@ -62,7 +60,6 @@ export default function CampaignDetail() {
   if (!campaign)
     return (
       <Screen>
-        <Navbar />
         <View style={styles.center}>
           <Text>Campaign not found</Text>
         </View>
@@ -71,7 +68,6 @@ export default function CampaignDetail() {
 
   return (
     <Screen>
-      <Navbar />
 
       <ScrollView contentContainerStyle={{ padding: Theme.spacing.lg }}>
         <Card>

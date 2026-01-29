@@ -14,7 +14,6 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 import Screen from "../../src/components/ui/Screen";
 import Card from "../../src/components/ui/Card";
-import Navbar from "../../src/components/Navbar";
 import TextField from "../../src/components/ui/TextField";
 import Button from "../../src/components/ui/Button";
 import LocationPickerModal from "../../src/components/LocationPickerModal";
@@ -144,7 +143,6 @@ export default function AddBusiness() {
 
   return (
     <Screen>
-      <Navbar />
 
       <ScrollView contentContainerStyle={styles.content}>
         <Card>

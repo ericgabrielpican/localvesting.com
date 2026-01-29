@@ -160,12 +160,12 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
           <View style={styles.rightArea}>
             {!user ? (
               <View style={styles.authButtons}>
-                <Pressable style={styles.secondaryBtn} onPress={() => go("/login")}>
+                <Pressable style={styles.secondaryBtn} onPress={() => go("/login?mode=login")}>
                   <Text style={styles.secondaryBtnText}>Log in</Text>
                 </Pressable>
-                <Pressable style={styles.primaryBtn} onPress={() => go("/login")}>
-                  <Text style={styles.primaryBtnText}>Sign up</Text>
-                </Pressable>
+               <Pressable style={styles.primaryBtn} onPress={() => go("/login?mode=signup")}>
+                 <Text style={styles.primaryBtnText}>Sign up</Text>
+               </Pressable>
               </View>
             ) : (
               <>
@@ -234,10 +234,10 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
 
           {!user ? (
             <View style={styles.mobileAuthRow}>
-              <Pressable style={styles.secondaryBtnWide} onPress={() => go("/login")}>
+              <Pressable style={styles.secondaryBtnWide} onPress={() => go("/login?mode=login")}>
                 <Text style={styles.secondaryBtnText}>Log in</Text>
               </Pressable>
-              <Pressable style={styles.primaryBtnWide} onPress={() => go("/login")}>
+              <Pressable style={styles.primaryBtnWide} onPress={() => go("/login?mode=signup")}>
                 <Text style={styles.primaryBtnText}>Sign up</Text>
               </Pressable>
             </View>

@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "extra": {
     
-      "APP_BASE_URL": "demodev.localvesting.com"
+      "APP_BASE_URL": "localhost:8081"
     },
     "plugins": [
       "expo-router",

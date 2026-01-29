@@ -17,7 +17,6 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import * as Location from "expo-location";
 
 import Screen from "../../src/components/ui/Screen";
-import Navbar from "../../src/components/Navbar";
 import { Theme } from "../../src/styles/Theme";
 import { db } from "../../src/firebase/config";
 
@@ -516,7 +515,6 @@ export default function MapPage() {
 
   return (
     <Screen>
-      <Navbar active="map" />
 
       <View style={styles.container}>
         {loading && (

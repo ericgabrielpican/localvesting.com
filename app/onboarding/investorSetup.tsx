@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { View, Alert } from "react-native";
 import Screen from "../../src/components/ui/Screen";
-import Navbar from "../../src/components/Navbar";
 import Card from "../../src/components/ui/Card";
 import TextField from "../../src/components/ui/TextField";
 import Button from "../../src/components/ui/Button";
@@ -35,7 +34,6 @@ export default function InvestorSetup() {
 
   return (
     <Screen>
-      <Navbar />
       <View style={{ padding: Theme.spacing.lg }}>
         <Card>
           <TextField label="Full name" value={name} onChangeText={setName} />

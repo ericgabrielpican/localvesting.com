@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Screen from "../../src/components/ui/Screen";
-import Navbar from "../../src/components/Navbar";
 import Card from "../../src/components/ui/Card";
 import Button from "../../src/components/ui/Button";
 import { Theme } from "../../src/styles/Theme";
@@ -12,7 +11,6 @@ export default function ChooseRole() {
 
   return (
     <Screen>
-      <Navbar />
 
       <View style={{ padding: Theme.spacing.lg }}>
         <Card>
