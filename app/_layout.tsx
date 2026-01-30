@@ -27,8 +27,8 @@ function AuthGate({ children }: { children: ReactNode }) {
 
     // legal pages public
     if (pathname.startsWith("/terms")) return true;
-    if (pathname.startsWith("/privacypolicy")) return true;
-    if (pathname.startsWith("/cookiepolicy")) return true;
+    if (pathname.startsWith("/privacy-policy")) return true;
+    if (pathname.startsWith("/cookie-policy")) return true;
 
     return false;
   }, [pathname]);

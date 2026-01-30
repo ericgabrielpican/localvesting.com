@@ -1,67 +1,200 @@
-export const metadata = { title: "Terms & Conditions | LocalVesting" };
+// app/terms/index.tsx
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  useWindowDimensions,
+} from "react-native";
+import { useRouter } from "expo-router";
+
+import Screen from "../../src/components/ui/Screen";
+import { Theme } from "../../src/styles/Theme";
 
 export default function TermsPage() {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
+  const go = (path: string) => router.push(path as any);
+
   return (
-    <main style={styles.main}>
-      <h1 style={styles.h1}>Terms & Conditions</h1>
-      <p style={styles.muted}>Last updated: {new Date().toLocaleDateString()}</p>
+    <Screen>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.bgSoft} />
 
-      <h2 style={styles.h2}>1. Demo phase (no real-world money)</h2>
-      <p style={styles.p}>
-        LocalVesting is currently provided in a <b>demo/testing phase</b>. The platform is not operating with real-world money yet.
-        Any features shown are for demonstration and product testing purposes.
-      </p>
+        {/* HEADER */}
+        <View style={styles.header}>
+          <Text style={styles.kicker}>Terms</Text>
+          <Text style={[styles.title, isMobile && styles.titleMobile]}>
+            Terms & Conditions
+          </Text>
+          <Text style={styles.subtitle}>
+            LocalVesting is currently in demo phase (no real-world money). By
+            using the platform, you agree to these terms.
+          </Text>
+        </View>
 
-      <h2 style={styles.h2}>2. Platform role</h2>
-      <p style={styles.p}>
-        LocalVesting is a technology platform acting solely as an <b>intermediary</b> between users and listed businesses.
-        LocalVesting is not a bank, investment firm, broker, or financial advisor, and does not provide investment advice.
-      </p>
+        {/* CONTENT */}
+        <View style={styles.storyCard}>
+          <Text style={styles.paragraph}>
+            <Text style={styles.strong}>Operator:</Text> Eric Pican (natural
+            person){"\n"}
+            <Text style={styles.strong}>Contact:</Text> gdpr@localvesting.com{"\n"}
+            <Text style={styles.strong}>Eligibility:</Text> 18+ only
+          </Text>
 
-      <h2 style={styles.h2}>3. Eligibility</h2>
-      <p style={styles.p}>You must be at least <b>18 years old</b> to use the platform.</p>
+          <Text style={styles.sectionTitle}>1) Demo phase / no real money</Text>
+          <Text style={styles.paragraph}>
+            LocalVesting is a demo/intermediary platform. It is not currently
+            operating with real-world funds. Any “investments”, “returns”, or
+            “campaign funding” shown are for demonstration/testing only.
+          </Text>
 
-      <h2 style={styles.h2}>4. User obligations</h2>
-      <ul style={styles.ul}>
-        <li>Provide accurate information.</li>
-        <li>Use the platform lawfully and respectfully.</li>
-        <li>Do not attempt unauthorized access or abuse.</li>
-      </ul>
+          <Text style={styles.sectionTitle}>2) Platform role</Text>
+          <Text style={styles.paragraph}>
+            LocalVesting acts as an intermediary platform connecting potential
+            investors and businesses. We do not provide financial advice. You
+            are responsible for your decisions and for verifying information.
+          </Text>
 
-      <h2 style={styles.h2}>5. No guarantee</h2>
-      <p style={styles.p}>
-        The platform does not guarantee outcomes, availability of listings, or any results from interactions with third parties.
-      </p>
+          <Text style={styles.sectionTitle}>3) Accounts</Text>
+          <Text style={styles.paragraph}>
+            You must provide accurate information and keep your account secure.
+            You are responsible for all activity under your account.
+          </Text>
 
-      <h2 style={styles.h2}>6. Limitation of liability</h2>
-      <p style={styles.p}>
-        To the maximum extent permitted by law, LocalVesting is not liable for indirect losses, lost profits, third-party actions,
-        or technical interruptions.
-      </p>
+          <Text style={styles.sectionTitle}>4) Acceptable use</Text>
+          <View style={styles.list}>
+            <Text style={styles.bullet}>
+              • Do not misuse the platform, attempt unauthorized access, or
+              interfere with operation.
+            </Text>
+            <Text style={styles.bullet}>
+              • Do not upload unlawful content or impersonate others.
+            </Text>
+          </View>
 
-      <h2 style={styles.h2}>7. Suspension/termination</h2>
-      <p style={styles.p}>
-        Accounts may be suspended/terminated for fraud, abuse, or violations of these Terms.
-      </p>
+          <Text style={styles.sectionTitle}>5) Content and campaigns</Text>
+          <Text style={styles.paragraph}>
+            Campaign and business information may be user-generated. We may
+            review, moderate, or remove content to protect users and the
+            platform.
+          </Text>
 
-      <h2 style={styles.h2}>8. Contact</h2>
-      <p style={styles.p}>
-        For legal/privacy inquiries: <b>gdpr@localvesting.com</b>
-      </p>
+          <Text style={styles.sectionTitle}>6) Suspension and termination</Text>
+          <Text style={styles.paragraph}>
+            We may suspend or terminate access if we reasonably believe your use
+            violates these terms or creates risk for others.
+          </Text>
 
-      <h2 style={styles.h2}>9. Governing law</h2>
-      <p style={styles.p}>
-        These Terms are governed by Romanian law and applicable EU law.
-      </p>
-    </main>
+          <Text style={styles.sectionTitle}>7) Liability</Text>
+          <Text style={styles.paragraph}>
+            The platform is provided “as is” without warranties. To the maximum
+            extent permitted by law, we are not liable for indirect damages,
+            lost profits, or losses arising from your use of the platform.
+          </Text>
+
+          <Text style={styles.sectionTitle}>8) Changes</Text>
+          <Text style={styles.paragraph}>
+            We may update these terms as the product evolves. Continued use
+            after updates means you accept the updated terms.
+          </Text>
+
+          <Text style={styles.tiny}>
+            Last updated: {new Date().toLocaleDateString("en-GB")}
+          </Text>
+        </View>
+
+        {/* LINKS */}
+        <View style={styles.bottomButtons}>
+          <Pressable style={styles.secondaryButton} onPress={() => go("/privacy-policy")}>
+            <Text style={styles.secondaryButtonLabel}>Privacy Policy</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={() => go("/cookie-policy")}>
+            <Text style={styles.secondaryButtonLabel}>Cookie Policy</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </Screen>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  main: { maxWidth: 900, margin: "0 auto", padding: "32px 18px", lineHeight: 1.6 },
-  h1: { fontSize: 34, marginBottom: 6 },
-  h2: { fontSize: 20, marginTop: 22, marginBottom: 8 },
-  p: { margin: "10px 0" },
-  ul: { margin: "10px 0", paddingLeft: 20 },
-  muted: { opacity: 0.7, marginTop: 0 },
-};
+const styles = StyleSheet.create({
+  container: {
+    maxWidth: 1000,
+    width: "100%",
+    alignSelf: "center",
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.xl,
+    gap: Theme.spacing.xl,
+    position: "relative",
+  },
+  bgSoft: {
+    position: "absolute",
+    top: -80,
+    left: -80,
+    right: -80,
+    height: 220,
+    borderBottomLeftRadius: 80,
+    borderBottomRightRadius: 80,
+    backgroundColor: "#F5F7FF",
+  },
+  header: { gap: 6 },
+  kicker: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Theme.colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  title: { fontSize: 34, fontWeight: "700", color: Theme.colors.text },
+  titleMobile: { fontSize: 30 },
+  subtitle: {
+    fontSize: 16,
+    color: "#374151",
+    lineHeight: 22,
+    marginTop: 2,
+  },
+
+  storyCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 24,
+    padding: Theme.spacing.lg,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    gap: 12,
+  },
+  sectionTitle: { ...Theme.typography.title },
+  paragraph: { fontSize: 15, color: "#374151", lineHeight: 22 },
+  strong: { fontWeight: "600", color: "#111827" },
+
+  list: { gap: 8, marginTop: 2 },
+  bullet: { fontSize: 15, color: "#374151", lineHeight: 22 },
+
+  tiny: { fontSize: 12, color: Theme.colors.textMuted, marginTop: 6 },
+
+  bottomButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    paddingTop: Theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.border,
+  },
+  secondaryButton: {
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: Theme.colors.surface,
+  },
+  secondaryButtonLabel: {
+    color: Theme.colors.text,
+    fontWeight: "500",
+    fontSize: 14,
+  },
+});
