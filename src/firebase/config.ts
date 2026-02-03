@@ -5,15 +5,18 @@ import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
+const env = (key: string) =>
+  process.env[key] ?? process.env[`NEXT_PUBLIC_${key}`] ?? process.env[`EXPO_PUBLIC_${key}`];
+
 const firebaseConfig = {
- apiKey: "AIzaSyDiJHWYUA5N767cXx5U992p4Zl4n0pbDNo",
-  authDomain: "localvesting.firebaseapp.com",
-  projectId: "localvesting",
-  storageBucket: "localvesting.firebasestorage.app",
-  messagingSenderId: "236840190653",
-  appId: "1:236840190653:web:5901c842a3fd1545486dd4",
-  measurementId: "G-H95C6KW2SL"
+  apiKey: env("FIREBASE_API_KEY")!,
+  authDomain: env("FIREBASE_AUTH_DOMAIN")!,
+  projectId: env("FIREBASE_PROJECT_ID")!,
+  storageBucket: env("FIREBASE_STORAGE_BUCKET")!,
+  messagingSenderId: env("FIREBASE_MESSAGING_SENDER_ID")!,
+  appId: env("FIREBASE_APP_ID")!,
 };
+
 
 const app = initializeApp(firebaseConfig);
 
