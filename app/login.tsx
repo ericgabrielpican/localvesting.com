@@ -1,5 +1,5 @@
 // app/login.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   ScrollView,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import Constants from "expo-constants";
 import {
   loginWithEmailPassword,
   registerWithEmailPassword,
@@ -28,14 +29,34 @@ import { httpsCallable } from "firebase/functions";
 
 import TurnstileWidget from "../src/components/capcha/TurnstileWidget.web";
 
-// CLOUDFLARE TURNSTILE SITE KEY here (client-side)
-const env = (key: string) =>
-  process.env[key] ?? process.env[`NEXT_PUBLIC_${key}`] ?? process.env[`EXPO_PUBLIC_${key}`];
-const TURNSTILE_SITE_KEY = env("TURNSTILE_SITE_KEY");
-
 const VERIFY_FN_NAME = "verifyTurnstile";
-
 type Mode = "login" | "signup";
+
+// ------------------------------------------------------------------
+// ✅ Expo-safe env reader
+// Priority:
+// 1) app.config.js -> expo.extra
+// 2) EXPO_PUBLIC_* (dev / legacy fallback)
+// 3) process.env (rarely useful in Expo web prod)
+// ------------------------------------------------------------------
+type Extra = Record<string, any>;
+
+function getExtra(): Extra {
+  return (
+    (Constants.expoConfig?.extra as Extra) ||
+    ((Constants as any).manifest?.extra as Extra) ||
+    ((Constants as any).manifest2?.extra?.extra as Extra) ||
+    {}
+  );
+}
+
+function env(key: string): string | undefined {
+  const extra = getExtra();
+  return extra?.[key] ?? process.env[`EXPO_PUBLIC_${key}`] ?? process.env[key];
+}
+
+// Cloudflare Turnstile site key (SAFE to be public)
+const TURNSTILE_SITE_KEY = env("TURNSTILE_SITE_KEY");
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -53,6 +74,10 @@ export default function LoginScreen() {
 
   // 🔐 Turnstile token from widget (web)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  // ✅ Guards to stop verify loops
+  const verifyingRef = useRef(false);
+  const lastVerifiedTokenRef = useRef<string | null>(null);
 
   // ✅ Legal acceptance (required ONLY for signup)
   const [readPrivacy, setReadPrivacy] = useState(false);
@@ -96,19 +121,43 @@ export default function LoginScreen() {
   };
 
   const requireTurnstile = async () => {
-    // Enforce only on web (where bots are your biggest problem)
     if (Platform.OS !== "web") return;
+
+    if (!TURNSTILE_SITE_KEY) {
+      Alert.alert(
+        "Config missing",
+        "Turnstile site key is missing. Set EXPO_PUBLIC_TURNSTILE_SITE_KEY and map it into expo.extra."
+      );
+      throw new Error("TURNSTILE_SITE_KEY missing");
+    }
 
     if (!turnstileToken) {
       Alert.alert("Verification required", "Please complete the security check.");
       throw new Error("Turnstile token missing");
     }
 
-    const verify = httpsCallable(functions, VERIFY_FN_NAME);
-    const res: any = await verify({ token: turnstileToken });
+    // ✅ Prevent repeated verification for the same token
+    if (lastVerifiedTokenRef.current === turnstileToken) return;
 
-    if (res?.data?.success === false) {
-      throw new Error(res?.data?.message ?? "Turnstile verification failed");
+    // ✅ Prevent concurrent verify calls
+    if (verifyingRef.current) return;
+
+    verifyingRef.current = true;
+    try {
+      const verify = httpsCallable(functions, VERIFY_FN_NAME);
+      const res: any = await verify({ token: turnstileToken });
+
+      if (res?.data?.success === false) {
+        // Server says invalid => clear so user can retry
+        lastVerifiedTokenRef.current = null;
+        setTurnstileToken(null);
+        throw new Error(res?.data?.message ?? "Turnstile verification failed");
+      }
+
+      // ✅ Mark token as verified so we don't verify again
+      lastVerifiedTokenRef.current = turnstileToken;
+    } finally {
+      verifyingRef.current = false;
     }
   };
 
@@ -181,8 +230,9 @@ export default function LoginScreen() {
 
       await handlePostLogin(user);
 
-      // reset token after success
-      setTurnstileToken(null);
+      // ✅ DO NOT clear token here (can cause Turnstile to re-run)
+      // If you want to force a new challenge only after a while,
+      // do it later or let Turnstile rotate naturally.
     } catch (e: any) {
       console.error(e);
       Alert.alert("Authentication error", e?.message ?? "Could not authenticate.");
@@ -219,9 +269,13 @@ export default function LoginScreen() {
       if (Platform.OS === "web") {
         const user = await loginWithGoogleWeb();
         await handlePostLogin(user);
-        setTurnstileToken(null);
+
+        // ✅ DO NOT clear token here either
       } else {
-        Alert.alert("Not available yet", "Google sign-in is currently implemented for web only.");
+        Alert.alert(
+          "Not available yet",
+          "Google sign-in is currently implemented for web only."
+        );
       }
     } catch (e: any) {
       console.error(e);
@@ -399,18 +453,39 @@ export default function LoginScreen() {
             </View>
           )}
 
-          {/* ✅ Turnstile appears on WEB (via TurnstileWidget.web.tsx) */}
+          {/* ✅ Turnstile on WEB only */}
           {Platform.OS === "web" && (
             <View style={{ marginBottom: 14 }}>
-              <TurnstileWidget
-                siteKey={TURNSTILE_SITE_KEY}
-                onToken={(t) => setTurnstileToken(t)}
-                onExpired={() => setTurnstileToken(null)}
-                onError={() => {
-                  setTurnstileToken(null);
-                  Alert.alert("Security check error", "Could not load Turnstile. Please refresh.");
-                }}
-              />
+              {TURNSTILE_SITE_KEY ? (
+                <TurnstileWidget
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onToken={(t) => setTurnstileToken(t)}
+                  onExpired={() => {
+                    lastVerifiedTokenRef.current = null;
+                    setTurnstileToken(null);
+                  }}
+                  onError={() => {
+                    lastVerifiedTokenRef.current = null;
+                    setTurnstileToken(null);
+                    Alert.alert("Security check error", "Could not load Turnstile. Please refresh.");
+                  }}
+                />
+              ) : (
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#fecaca",
+                    backgroundColor: "#fff1f2",
+                    borderRadius: 12,
+                    padding: 10,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, color: "#991b1b", textAlign: "center" }}>
+                    Turnstile site key missing. Set EXPO_PUBLIC_TURNSTILE_SITE_KEY and map it into expo.extra.
+                  </Text>
+                </View>
+              )}
+
               <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 6, textAlign: "center" }}>
                 {turnstileToken ? "✅ Security check completed" : "Complete the security check above"}
               </Text>
@@ -454,6 +529,9 @@ export default function LoginScreen() {
               const next = mode === "login" ? "signup" : "login";
               setMode(next);
               router.replace(`/login?mode=${next}` as any);
+
+              // Optional: if switching modes, allow a fresh verify for next action
+              lastVerifiedTokenRef.current = null;
             }}
             style={{ marginTop: 10 }}
           >

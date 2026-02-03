@@ -1,0 +1,22 @@
+// app.config.js
+import "dotenv/config";
+
+export default ({ config }) => ({
+  ...config,
+  extra: {
+    ...(config.extra || {}),
+
+    FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+    FIREBASE_AUTH_DOMAIN: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    FIREBASE_PROJECT_ID: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+    FIREBASE_STORAGE_BUCKET: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    FIREBASE_MESSAGING_SENDER_ID: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+
+    FIREBASE_FUNCTIONS_REGION: process.env.EXPO_PUBLIC_FIREBASE_FUNCTIONS_REGION || "us-central1",
+    USE_EMULATORS: process.env.EXPO_PUBLIC_USE_EMULATORS || "false",
+    EMULATOR_HOST: process.env.EXPO_PUBLIC_EMULATOR_HOST || "127.0.0.1",
+
+    TURNSTILE_SITE_KEY: process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY || "",
+  },
+});

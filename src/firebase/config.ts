@@ -1,12 +1,33 @@
 // src/firebase/config.ts
-import { initializeApp } from "firebase/app";
+import Constants from "expo-constants";
+import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
-const env = (key: string) =>
-  process.env[key] ?? process.env[`NEXT_PUBLIC_${key}`] ?? process.env[`EXPO_PUBLIC_${key}`];
+type Extra = Record<string, any>;
+
+function getExtra(): Extra {
+  // Works across SDK versions
+  return (
+    (Constants.expoConfig?.extra as Extra) ||
+    ((Constants as any).manifest?.extra as Extra) ||
+    ((Constants as any).manifest2?.extra?.extra as Extra) ||
+    {}
+  );
+}
+
+function env(key: string): string | undefined {
+  const extra = getExtra();
+  return (
+    // Prefer app.config.js injected values
+    extra?.[key] ??
+    // Fallbacks if needed
+    process.env[`EXPO_PUBLIC_${key}`] ??
+    process.env[key]
+  );
+}
 
 const firebaseConfig = {
   apiKey: env("FIREBASE_API_KEY")!,
@@ -17,36 +38,29 @@ const firebaseConfig = {
   appId: env("FIREBASE_APP_ID")!,
 };
 
-
-const app = initializeApp(firebaseConfig);
+// Avoid double-init during fast refresh
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-// export const functions = getFunctions(app);
 
-// ✅ Pin region to where your function is deployed (your deploy log shows us-central1)
-export const functions = getFunctions(app, "us-central1");
+// Region (defaults to us-central1)
+const region = env("FIREBASE_FUNCTIONS_REGION") || "us-central1";
+export const functions = getFunctions(app, region);
 
-// ------------------------------------------------------------
-// Emulator wiring (ONLY when you want local testing)
-// ------------------------------------------------------------
-// Turn emulators on/off via an env var:
-// EXPO_PUBLIC_USE_EMULATORS=true
-const USE_EMULATORS =
-  String(process.env.EXPO_PUBLIC_USE_EMULATORS).toLowerCase() === "true";
+// Emulators toggle
+const USE_EMULATORS = String(env("USE_EMULATORS") ?? "false").toLowerCase() === "true";
+const EMU_HOST = env("EMULATOR_HOST") || "127.0.0.1";
 
 if (USE_EMULATORS) {
-  // Firestore emulator default: 8080
-  connectFirestoreEmulator(db, "localhost", 8080);
-
-  // Functions emulator default: 5001
-  connectFunctionsEmulator(functions, "localhost", 5001);
-
-  // Storage emulator default: 9199 (optional)
-  connectStorageEmulator(storage, "localhost", 9199);
-
+  connectFirestoreEmulator(db, EMU_HOST, 8080);
+  connectFunctionsEmulator(functions, EMU_HOST, 5001);
+  connectStorageEmulator(storage, EMU_HOST, 9199);
   console.log("✅ Using Firebase emulators");
 } else {
   console.log("✅ Using Firebase production services");
 }
+
+// OPTIONAL TEMP DEBUG (remove after fix)
+// console.log("FB key prefix:", firebaseConfig.apiKey?.slice(0, 4), "len=", firebaseConfig.apiKey?.length);
