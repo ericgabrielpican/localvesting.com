@@ -3,9 +3,85 @@ import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue, Transaction } from "firebase-admin/firestore";
+import { defineSecret } from "firebase-functions/params";
 
 initializeApp();
 const db = getFirestore();
+
+//Capcha code
+
+const TURNSTILE_SECRET = defineSecret("TURNSTILE_SECRET");
+
+type VerifyTurnstileInput = {
+  token: string;
+  action?: string; // optional label you can pass from client
+};
+
+type VerifyTurnstileResult = {
+  ok: boolean;
+};
+
+export const verifyTurnstile = onCall<VerifyTurnstileInput>(
+  { secrets: [TURNSTILE_SECRET] },
+  async (request) => {
+    const token = request.data?.token;
+
+    if (!token || typeof token !== "string") {
+      throw new HttpsError("invalid-argument", "Missing Turnstile token.");
+    }
+
+    // Optional: you can enforce auth for some actions, but usually you want this
+    // to work BEFORE login too, so keep it unauthenticated.
+    // const uid = request.auth?.uid;
+
+    const secret = TURNSTILE_SECRET.value();
+    if (!secret) {
+      throw new HttpsError("failed-precondition", "TURNSTILE_SECRET not set.");
+    }
+
+    // Server-side validation endpoint (Cloudflare)
+    // https://challenges.cloudflare.com/turnstile/v0/siteverify :contentReference[oaicite:3]{index=3}
+    const form = new URLSearchParams();
+    form.set("secret", secret);
+    form.set("response", token);
+
+    // Optional: add user IP if you have it (callable requests generally don’t expose it cleanly)
+    // form.set("remoteip", "x.x.x.x");
+
+    let data: any;
+    try {
+      const resp = await fetch(
+        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: form.toString(),
+        }
+      );
+
+      data = await resp.json();
+    } catch (e) {
+      console.error("Turnstile verification fetch failed:", e);
+      throw new HttpsError("unavailable", "Turnstile verification unavailable.");
+    }
+
+    const success = data?.success === true;
+
+    if (!success) {
+      // You can log data["error-codes"] if needed
+      console.warn("Turnstile failed:", data);
+      throw new HttpsError("permission-denied", "Turnstile challenge failed.");
+    }
+
+    // Optional: if you pass action from client, you can validate it here
+    // (Cloudflare may return `action` depending on mode/setup)
+    // if (request.data?.action && data?.action && data.action !== request.data.action) { ... }
+
+    return { ok: true };
+  }
+);
+
+
 
 type CreateLivePledgeInput = {
   campaignId: string;
