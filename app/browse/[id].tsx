@@ -42,6 +42,8 @@ type PledgeRow = {
   createdAt?: Timestamp | null;
 };
 
+type WalletType = "live" | "demo";
+
 const RECENT_OVERFETCH = 80;
 const RECENT_PREVIEW_COUNT = 3;
 const DESC_COLLAPSE_AT = 220;
@@ -63,8 +65,12 @@ export default function CampaignDetail() {
   const [amount, setAmount] = useState("");
   const [pledging, setPledging] = useState(false);
 
+  // ✅ Wallet state (users/{uid}/wallet/main)
   const [walletLoading, setWalletLoading] = useState(true);
   const [walletLive, setWalletLive] = useState<number>(0);
+  const [walletDemo, setWalletDemo] = useState<number>(0);
+
+  const [walletType, setWalletType] = useState<WalletType>("live");
 
   const [recentLoading, setRecentLoading] = useState(true);
   const [recentPledges, setRecentPledges] = useState<PledgeRow[]>([]);
@@ -101,30 +107,39 @@ export default function CampaignDetail() {
     return () => unsub();
   }, [campaignId]);
 
-  // 2) Realtime wallet (wallets/{uid})
+  // 2) Realtime wallet (users/{uid}/wallet/main)
   useEffect(() => {
     if (!user?.uid) {
       setWalletLive(0);
+      setWalletDemo(0);
       setWalletLoading(false);
       return;
     }
 
     setWalletLoading(true);
+
+    const walletRef = doc(db, "users", user.uid, "wallet", "main");
+
     const unsub = onSnapshot(
-      doc(db, "wallets", user.uid),
+      walletRef,
       (snap) => {
         if (!snap.exists()) {
           setWalletLive(0);
+          setWalletDemo(0);
         } else {
           const data: any = snap.data();
           const live = Number(data?.liveBalance ?? 0);
-          setWalletLive(Number.isFinite(live) ? live : 0);
+          const demo = Number(data?.demoBalance ?? 0);
+
+          setWalletLive(Number.isFinite(live) ? Math.max(0, live) : 0);
+          setWalletDemo(Number.isFinite(demo) ? Math.max(0, demo) : 0);
         }
         setWalletLoading(false);
       },
       (err) => {
         console.error("wallet snapshot error:", err);
         setWalletLive(0);
+        setWalletDemo(0);
         setWalletLoading(false);
       }
     );
@@ -225,6 +240,7 @@ export default function CampaignDetail() {
 
   const goal = Number(campaign?.goal ?? 0);
   const raised = Number(campaign?.raised ?? 0);
+  const demoRaised = Number(campaign?.demoRaised ?? 0);
   const minInv = Number(campaign?.minInvestment ?? 0);
   const status = (campaign?.status ?? "").toString().toLowerCase();
 
@@ -233,12 +249,48 @@ export default function CampaignDetail() {
     return Math.max(0, goal - raised);
   }, [goal, raised]);
 
-  const progressPct = useMemo(() => {
+  // ✅ Real pct splits
+  const liveProgressPct = useMemo(() => {
     if (!Number.isFinite(goal) || goal <= 0) return 0;
     return Math.min(100, Math.max(0, (raised / goal) * 100));
   }, [goal, raised]);
 
+  const demoProgressPct = useMemo(() => {
+    if (!Number.isFinite(goal) || goal <= 0) return 0;
+    return Math.min(100, Math.max(0, (demoRaised / goal) * 100));
+  }, [goal, demoRaised]);
+
+  // ✅ Deterministic social proof (0..25)
+  const socialBasePct = useMemo(() => {
+    return pseudoRandomPctFromId(campaignId, 25);
+  }, [campaignId]);
+
+  // ✅ Cap to 100 total. Social gets reduced first if needed.
+  const socialShownPct = useMemo(() => {
+    const maxSocial = Math.max(0, 100 - (liveProgressPct + demoProgressPct));
+    return Math.min(socialBasePct, maxSocial);
+  }, [socialBasePct, liveProgressPct, demoProgressPct]);
+
+  // ✅ Live segment includes social + live
+  const liveShownPct = useMemo(() => {
+    return Math.min(100, socialShownPct + liveProgressPct);
+  }, [socialShownPct, liveProgressPct]);
+
+  // ✅ Demo sits after live
+  const demoShownPct = useMemo(() => {
+    const remainingForDemo = Math.max(0, 100 - liveShownPct);
+    return Math.min(demoProgressPct, remainingForDemo);
+  }, [demoProgressPct, liveShownPct]);
+
+  const totalShownPct = useMemo(() => {
+    return Math.min(100, liveShownPct + demoShownPct);
+  }, [liveShownPct, demoShownPct]);
+
   const parsedAmount = useMemo(() => Number(amount), [amount]);
+
+  const selectedBalance = useMemo(() => {
+    return walletType === "live" ? walletLive : walletDemo;
+  }, [walletType, walletLive, walletDemo]);
 
   const canPledge = useMemo(() => {
     if (!user) return false;
@@ -246,10 +298,15 @@ export default function CampaignDetail() {
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return false;
     if (status !== "active") return false;
     if (Number.isFinite(minInv) && parsedAmount < minInv) return false;
-    if (remaining !== null && parsedAmount > remaining) return false;
-    if (walletLive < parsedAmount) return false;
+
+    // Capacity check only for LIVE pledges (demo can exceed goal)
+    if (walletType === "live") {
+      if (remaining !== null && parsedAmount > remaining) return false;
+    }
+
+    if (selectedBalance < parsedAmount) return false;
     return true;
-  }, [user, pledging, parsedAmount, status, minInv, remaining, walletLive]);
+  }, [user, pledging, parsedAmount, status, minInv, remaining, selectedBalance, walletType]);
 
   const pledge = async () => {
     if (!user) {
@@ -265,14 +322,22 @@ export default function CampaignDetail() {
 
     try {
       setPledging(true);
-      const fn = httpsCallable(functions, "createLivePledge");
-      await fn({ campaignId, amount: amt });
+
+      const fnName = walletType === "live" ? "createLivePledge" : "createDemoPledge";
+      const fn = httpsCallable(functions, fnName);
+
+      // backend ignores walletType in your current callable input types, but safe to send
+      await fn({ campaignId, amount: amt, walletType });
 
       Alert.alert("Success", "Pledge confirmed!");
       setAmount("");
     } catch (e: any) {
       const msg =
-        e?.message || e?.details || "Could not confirm pledge. Please try again.";
+        e?.message ||
+        e?.details ||
+        (walletType === "demo"
+          ? "Demo pledging is not enabled on the backend yet."
+          : "Could not confirm pledge. Please try again.");
       Alert.alert("Pledge failed", msg);
       console.error("Pledge error:", e);
     } finally {
@@ -302,21 +367,77 @@ export default function CampaignDetail() {
     setSeeAllRecent((v) => !v);
   };
 
+  const BalanceToggle = (
+    <View style={styles.balanceToggleRow}>
+      <Pressable
+        onPress={() => setWalletType("live")}
+        style={[
+          styles.balanceToggleBtn,
+          walletType === "live" ? styles.balanceToggleBtnActive : null,
+        ]}
+      >
+        <Text
+          style={[
+            styles.balanceToggleText,
+            walletType === "live" ? styles.balanceToggleTextActive : null,
+          ]}
+        >
+          Balance
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => setWalletType("demo")}
+        style={[
+          styles.balanceToggleBtn,
+          walletType === "demo" ? styles.balanceToggleBtnActive : null,
+        ]}
+      >
+        <Text
+          style={[
+            styles.balanceToggleText,
+            walletType === "demo" ? styles.balanceToggleTextActive : null,
+          ]}
+        >
+          Demo Balance
+        </Text>
+      </Pressable>
+    </View>
+  );
+
   const PledgePanel = (
     <Card>
       <Text style={styles.section}>Invest / Pledge</Text>
 
       <View style={styles.walletBox}>
         <Text style={styles.walletText}>
-          Wallet Balance:{" "}
+          Balance:{" "}
           {walletLoading ? (
             <Text style={styles.metaStrong}>Loading…</Text>
           ) : (
             <Text style={styles.metaStrong}>{formatMoney(walletLive)}</Text>
           )}
         </Text>
+
+        <Text style={[styles.walletText, { marginTop: 6 }]}>
+          Demo Balance:{" "}
+          {walletLoading ? (
+            <Text style={styles.metaStrong}>Loading…</Text>
+          ) : (
+            <Text style={styles.metaStrong}>{formatMoney(walletDemo)}</Text>
+          )}
+        </Text>
+
+        <Text style={styles.walletHint}>Choose which balance to use for this pledge:</Text>
+
+        {BalanceToggle}
+
         <Text style={styles.walletHint}>
-          (Live wallet will be wired to 3DS payments later.)
+          Selected:{" "}
+          <Text style={styles.metaStrong}>
+            {walletType === "live" ? "Balance" : "Demo Balance"} (
+            {walletLoading ? "…" : formatMoney(selectedBalance)})
+          </Text>
         </Text>
       </View>
 
@@ -336,7 +457,13 @@ export default function CampaignDetail() {
       </Text>
 
       <Button
-        label={pledging ? "Processing..." : "Confirm pledge"}
+        label={
+          pledging
+            ? "Processing..."
+            : walletType === "live"
+            ? "Confirm pledge"
+            : "Confirm demo pledge"
+        }
         onPress={pledge}
         disabled={!canPledge}
       />
@@ -344,9 +471,9 @@ export default function CampaignDetail() {
       {!canPledge ? (
         <Text style={styles.disabledHint}>
           {user
-            ? walletLive < parsedAmount
-              ? "Not enough wallet balance."
-              : remaining !== null && parsedAmount > remaining
+            ? selectedBalance < parsedAmount
+              ? `Not enough ${walletType === "live" ? "balance" : "demo balance"}.`
+              : walletType === "live" && remaining !== null && parsedAmount > remaining
               ? "Amount exceeds remaining capacity."
               : minInv > 0 && parsedAmount > 0 && parsedAmount < minInv
               ? "Amount below minimum investment."
@@ -403,25 +530,47 @@ export default function CampaignDetail() {
                     ) : null}
                   </Text>
 
+                  {/* ✅ Stacked progress bar (ghost + live + demo) */}
                   <View style={styles.progressTrack}>
-                    <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
+                    <View style={[styles.progressGhost, { width: `${socialShownPct}%` }]} />
+                    <View style={[styles.progressLive, { width: `${liveShownPct}%` }]} />
+                    <View
+                      style={[
+                        styles.progressDemo,
+                        { left: `${liveShownPct}%`, width: `${demoShownPct}%` },
+                      ]}
+                    />
                   </View>
 
                   <Text style={styles.metaSmall}>
-                    Status: <Text style={styles.metaStrong}>{status || "unknown"}</Text>
+                    Live: <Text style={styles.metaStrong}>{formatMoney(raised)}</Text> • Demo:{" "}
+                    <Text style={styles.metaStrong}>{formatMoney(demoRaised)}</Text>
+                   
                     {remaining !== null ? (
                       <>
                         {" "}
                         • Remaining:{" "}
                         <Text style={styles.metaStrong}>{formatMoney(remaining)}</Text>
                       </>
-                    ) : null}
+                    ) : null}  
                   </Text>
+
+                  
+                  <Text style={styles.metaSmall}>
+                   Status: <Text style={styles.metaStrong}>{status || "unknown"}</Text>
+
+                </Text>
 
                   <Text style={styles.metaSmall}>
                     APR: <Text style={styles.metaStrong}>{formatApr(campaign.apr)}</Text> • Min:{" "}
                     <Text style={styles.metaStrong}>{formatMoney(minInv)}</Text> • Term:{" "}
                     <Text style={styles.metaStrong}>{campaign.termMonths ?? "-"} mo</Text>
+                  </Text>
+
+                  <Text style={styles.metaSmall}>
+                    Progress shown: <Text style={styles.metaStrong}>{totalShownPct.toFixed(0)}%</Text>{" "}
+                    {/* (live: <Text style={styles.metaStrong}>{liveProgressPct.toFixed(0)}%</Text>, demo:{" "} */}
+                    {/* <Text style={styles.metaStrong}>{demoProgressPct.toFixed(0)}%</Text>) */}
                   </Text>
                 </View>
               </Card>
@@ -465,12 +614,16 @@ export default function CampaignDetail() {
                 ) : (
                   <View style={styles.bubblesWrap}>
                     {recentToShow.map((p) => {
-                      const nameFromUserDoc = nameCache[p.investorId];
-                      const baseName =
-                        (nameFromUserDoc && nameFromUserDoc.trim()) ||
-                        maskUid(p.investorId);
+                    const nameFromUserDoc = nameCache[p.investorId];
 
-                      const displayName = censorShort(baseName);
+const baseName =
+  typeof nameFromUserDoc === "string" &&
+  nameFromUserDoc.trim().length > 0
+    ? nameFromUserDoc.trim()
+    : "User";
+
+const displayName = censorShort(baseName);
+
                       const dateLabel = formatDate(p.createdAt);
 
                       return (
@@ -550,12 +703,24 @@ function maskUid(uid: string) {
   return `${head}***`;
 }
 
-// requested: "first few letters then asterix"
 function censorShort(name: string) {
   const s = String(name || "").trim();
   if (!s) return "User***";
   const head = s.slice(0, 3);
   return `${head}***`;
+}
+
+// ✅ deterministic pseudo-random 0..maxPct based on campaignId string
+function pseudoRandomPctFromId(id: string, maxPct: number) {
+  if (!id) return 0;
+  let h = 2166136261; // FNV-ish
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const x = (h >>> 0) / 4294967295;
+  const pct = x * Math.max(0, maxPct);
+  return Math.max(0, Math.min(maxPct, pct));
 }
 
 const styles = StyleSheet.create({
@@ -613,14 +778,35 @@ const styles = StyleSheet.create({
   metaSmall: { fontSize: 12, color: Theme.colors.textMuted, marginTop: 6, fontWeight: "400" as any },
   metaStrong: { fontWeight: "400", color: Theme.colors.text },
 
+  // ✅ Stacked progress bar styles
   progressTrack: {
     height: 10,
     borderRadius: 999,
     backgroundColor: "#E5E7EB",
     overflow: "hidden",
     marginTop: 8,
+    position: "relative",
   },
-  progressFill: { height: "100%", backgroundColor: Theme.colors.primary },
+  progressGhost: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "#FEF3C7", // pale amber
+  },
+  progressLive: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "#F59E0B", // amber (live)
+  },
+  progressDemo: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    backgroundColor: "#60A5FA", // blue (demo)
+  },
 
   descHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   desc: { ...Theme.typography.body, fontWeight: "400" as any },
@@ -653,13 +839,42 @@ const styles = StyleSheet.create({
   walletBox: {
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    backgroundColor: "#F8FAFF",
+    backgroundColor: "#FFFBEB",
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
   },
   walletText: { fontSize: 13, color: Theme.colors.textMuted, fontWeight: "400" as any },
-  walletHint: { fontSize: 12, color: Theme.colors.textMuted, marginTop: 4, fontWeight: "400" as any },
+  walletHint: { fontSize: 12, color: Theme.colors.textMuted, marginTop: 8, fontWeight: "400" as any },
+
+  balanceToggleRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 10,
+  },
+  balanceToggleBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    backgroundColor: "#ffffff",
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  balanceToggleBtnActive: {
+    borderColor: "#F59E0B",
+    backgroundColor: "#FEF3C7",
+  },
+  balanceToggleText: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    fontWeight: "400",
+  },
+  balanceToggleTextActive: {
+    color: "#92400E",
+    fontWeight: "600",
+  },
 
   helper: { fontSize: 12, color: Theme.colors.textMuted, marginTop: 6, marginBottom: 10, fontWeight: "400" as any },
   disabledHint: { fontSize: 12, color: "#B45309", marginTop: 10, fontWeight: "400" as any },
@@ -686,7 +901,7 @@ const styles = StyleSheet.create({
   bubbleTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
 
   bubbleName: { flex: 1, minWidth: 0, fontSize: 13, color: Theme.colors.text, fontWeight: "400" },
-  bubbleAmount: { fontSize: 14, color: Theme.colors.text, fontWeight: "700" }, // bold EUR
+  bubbleAmount: { fontSize: 14, color: Theme.colors.text, fontWeight: "700" },
   bubbleDate: { marginTop: 6, fontSize: 12, color: Theme.colors.textMuted, fontWeight: "400" },
 
   seeMoreBubble: {

@@ -22,6 +22,7 @@ import {
   resetPassword,
   loginWithGoogleWeb,
 } from "../src/firebase/auth";
+import { ensureUserWallet } from "../src/firebase/wallet";
 
 import { db, functions } from "../src/firebase/config";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -226,8 +227,9 @@ export default function LoginScreen() {
           { email, role: null, createdAt: serverTimestamp() },
           { merge: true }
         );
+     
       }
-
+   await ensureUserWallet(user.uid);
       await handlePostLogin(user);
 
       // ✅ DO NOT clear token here (can cause Turnstile to re-run)

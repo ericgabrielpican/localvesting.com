@@ -109,7 +109,7 @@ async function geocodeAddress(address: string): Promise<Coords | null> {
 
 export default function MapPage() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
   const isMobileLayout = !isWeb && width < 900;
 
@@ -139,6 +139,7 @@ export default function MapPage() {
   useEffect(() => {
     if (categoriesInUse.length === 0) return;
     setSelectedCats(new Set(categoriesInUse));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoriesInUse.join("|")]);
 
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
@@ -157,6 +158,15 @@ export default function MapPage() {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require("react-native-webview").WebView;
   }, [isWeb]);
+
+  // ✅ NEW: make filters sit BELOW the button and be compact + scrollable + less/more
+  const topFiltersY = 78 + 48 + 10; // below the showFilters button
+  const maxPanelHeight = Math.min(420, Math.max(240, Math.floor(height * 0.48)));
+  const compactHeight = 220;
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  useEffect(() => {
+    if (!filtersOpen) setFiltersExpanded(false);
+  }, [filtersOpen]);
 
   // Firestore subscriptions
   useEffect(() => {
@@ -513,9 +523,13 @@ export default function MapPage() {
     else router.push(`/businesses/${selectedPoint.id}` as any);
   };
 
+  // ✅ show fewer categories by default, with "Show more/less"
+  const MAX_CATS_COLLAPSED = 8;
+  const catsCollapsed = !filtersExpanded && categoriesInUse.length > MAX_CATS_COLLAPSED;
+  const catsToRender = catsCollapsed ? categoriesInUse.slice(0, MAX_CATS_COLLAPSED) : categoriesInUse;
+
   return (
     <Screen>
-
       <View style={styles.container}>
         {loading && (
           <View style={styles.loadingOverlay}>
@@ -543,22 +557,29 @@ export default function MapPage() {
         )}
 
         {/* Search bar (top-left) */}
-        <View style={styles.searchBar}>
-          <TextInput
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Search location…"
-            placeholderTextColor="#9ca3af"
-            style={styles.searchInput}
-            onSubmitEditing={onSearchGo}
-          />
-          <TouchableOpacity style={styles.goBtn} onPress={onSearchGo} disabled={searchBusy}>
-            <Text style={[styles.goBtnText, styles.fw400]}>{searchBusy ? "…" : "Go"}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.locateBtn} onPress={onLocate}>
-            <Text style={[styles.locateIcon, styles.fw400]}>➤</Text>
-          </TouchableOpacity>
-        </View>
+       {/* Search bar (top-left) */}
+<View style={styles.topControlsRow}>
+  <View style={styles.searchBar}>
+    <TextInput
+      value={searchText}
+      onChangeText={setSearchText}
+      placeholder="Search location…"
+      placeholderTextColor="#9ca3af"
+      style={styles.searchInput}
+      onSubmitEditing={onSearchGo}
+      returnKeyType="search"
+    />
+
+    <TouchableOpacity style={styles.goBtn} onPress={onSearchGo} disabled={searchBusy}>
+      <Text style={[styles.goBtnText, styles.fw400]}>{searchBusy ? "…" : "Go"}</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity style={styles.locateBtn} onPress={onLocate}>
+      <Text style={[styles.locateIcon, styles.fw400]}>➤</Text>
+    </TouchableOpacity>
+  </View>
+</View>
+
 
         {/* Filters toggle button below search bar (top-left) */}
         <TouchableOpacity
@@ -570,118 +591,41 @@ export default function MapPage() {
           </Text>
         </TouchableOpacity>
 
-        {/* WEB: filters panel top-right | MOBILE: bottom sheet */}
-        {filtersOpen &&
-          (isMobileLayout ? (
-            <>
-              {/* backdrop */}
-              <TouchableOpacity
-                activeOpacity={1}
-                onPress={() => setFiltersOpen(false)}
-                style={styles.backdrop}
-              />
+        {/* ✅ WEB: filters panel BELOW the button (NOT overlapping), compact height + scroll + show more/less */}
+        {filtersOpen && !isMobileLayout && (
+          <View
+            style={[
+              styles.filtersPanel,
+              {
+                top: topFiltersY,
+                right: undefined,
+                left: 16,
+                maxHeight: filtersExpanded ? maxPanelHeight : compactHeight,
+              },
+            ]}
+          >
+            <View style={styles.panelHeaderRow}>
+              <Text style={[styles.filtersTitle, styles.fw400]}>Filters</Text>
 
-              <View style={styles.bottomSheet}>
-                <View style={styles.sheetHandle} />
-
-                <ScrollView contentContainerStyle={{ paddingBottom: 14 }}>
-                  <Text style={[styles.sheetTitle, styles.fw400]}>Filters</Text>
-
-                  <View style={styles.sheetCard}>
-                    <Text style={[styles.sheetSectionTitle, styles.fw400]}>Show on Map</Text>
-
-                    <TouchableOpacity
-                      style={styles.checkRow}
-                      onPress={() => setShowCampaigns((v) => !v)}
-                    >
-                      <View style={[styles.checkbox, showCampaigns && styles.checkboxOn]}>
-                        <Text style={[styles.checkboxTick, styles.fw400]}>
-                          {showCampaigns ? "✓" : ""}
-                        </Text>
-                      </View>
-                      <Text style={[styles.checkLabel, styles.fw400]}>💰 Opportunities</Text>
-                      <View style={styles.countPill}>
-                        <Text style={[styles.countPillText, styles.fw400]}>
-                          {campaignPinCount}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.checkRow, { marginTop: 10 }]}
-                      onPress={() => setShowBusinesses((v) => !v)}
-                    >
-                      <View style={[styles.checkbox, showBusinesses && styles.checkboxOn]}>
-                        <Text style={[styles.checkboxTick, styles.fw400]}>
-                          {showBusinesses ? "✓" : ""}
-                        </Text>
-                      </View>
-                      <Text style={[styles.checkLabel, styles.fw400]}>🏢 Businesses</Text>
-                      <View style={styles.countPill}>
-                        <Text style={[styles.countPillText, styles.fw400]}>
-                          {businessPinCount}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.sheetCard}>
-                    <View style={styles.catsHeader}>
-                      <Text style={[styles.sheetSectionTitle, styles.fw400]}>Categories</Text>
-                      <View style={{ flexDirection: "row", gap: 14 }}>
-                        <TouchableOpacity onPress={selectAllCats}>
-                          <Text style={[styles.catsAction, styles.fw400]}>All</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={selectNoCats}>
-                          <Text style={[styles.catsAction, styles.fw400]}>None</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    {categoriesInUse.map((cat) => {
-                      const active = selectedCats.has(cat);
-                      return (
-                        <TouchableOpacity
-                          key={cat}
-                          style={styles.catRow}
-                          onPress={() => toggleCategory(cat)}
-                        >
-                          <View style={[styles.checkbox, active && styles.checkboxOn]}>
-                            <Text style={[styles.checkboxTick, styles.fw400]}>
-                              {active ? "✓" : ""}
-                            </Text>
-                          </View>
-                          <View
-                            style={[
-                              styles.colorDot,
-                              { backgroundColor: colorForCategory(cat, "#2563eb") },
-                            ]}
-                          />
-                          <Text style={[styles.catLabel, styles.fw400]}>{cat}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  <Text style={[styles.footerText, styles.fw400]}>
-                    Showing: {shownCampaignCount} campaigns, {shownBusinessCount} businesses
+              <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+                <TouchableOpacity onPress={() => setFiltersExpanded((v) => !v)}>
+                  <Text style={[styles.expandText, styles.fw400]}>
+                    {filtersExpanded ? "Show less" : "Show more"}
                   </Text>
-                  <Text style={[styles.footerTextMuted, styles.fw400]}>
-                    {selectedCats.size} / {categoriesInUse.length} categories
-                  </Text>
+                </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.sheetCloseBtn}
-                    onPress={() => setFiltersOpen(false)}
-                  >
-                    <Text style={[styles.sheetCloseText, styles.fw400]}>Done</Text>
-                  </TouchableOpacity>
-                </ScrollView>
+                <TouchableOpacity onPress={() => setFiltersOpen(false)} style={styles.panelCloseBtn}>
+                  <Text style={[styles.panelCloseText, styles.fw400]}>✕</Text>
+                </TouchableOpacity>
               </View>
-            </>
-          ) : (
-            <View style={styles.filtersPanel}>
-              <Text style={[styles.filtersTitle, styles.fw400]}>Show on Map</Text>
+            </View>
+
+            <ScrollView
+              style={{ marginTop: 10 }}
+              contentContainerStyle={{ paddingBottom: 10 }}
+              showsVerticalScrollIndicator
+            >
+              <Text style={[styles.sectionTitle, styles.fw400]}>Show on Map</Text>
 
               <View style={{ marginTop: 10 }}>
                 <TouchableOpacity
@@ -689,9 +633,7 @@ export default function MapPage() {
                   onPress={() => setShowCampaigns((v) => !v)}
                 >
                   <View style={[styles.checkbox, showCampaigns && styles.checkboxOn]}>
-                    <Text style={[styles.checkboxTick, styles.fw400]}>
-                      {showCampaigns ? "✓" : ""}
-                    </Text>
+                    <Text style={[styles.checkboxTick, styles.fw400]}>{showCampaigns ? "✓" : ""}</Text>
                   </View>
                   <Text style={[styles.checkLabel, styles.fw400]}>💰 Opportunities</Text>
                   <View style={styles.countPill}>
@@ -704,9 +646,7 @@ export default function MapPage() {
                   onPress={() => setShowBusinesses((v) => !v)}
                 >
                   <View style={[styles.checkbox, showBusinesses && styles.checkboxOn]}>
-                    <Text style={[styles.checkboxTick, styles.fw400]}>
-                      {showBusinesses ? "✓" : ""}
-                    </Text>
+                    <Text style={[styles.checkboxTick, styles.fw400]}>{showBusinesses ? "✓" : ""}</Text>
                   </View>
                   <Text style={[styles.checkLabel, styles.fw400]}>🏢 Businesses</Text>
                   <View style={styles.countPill}>
@@ -729,7 +669,7 @@ export default function MapPage() {
                 </View>
               </View>
 
-              {categoriesInUse.map((cat) => {
+              {catsToRender.map((cat) => {
                 const active = selectedCats.has(cat);
                 return (
                   <TouchableOpacity
@@ -751,6 +691,19 @@ export default function MapPage() {
                 );
               })}
 
+              {categoriesInUse.length > MAX_CATS_COLLAPSED ? (
+                <TouchableOpacity
+                  onPress={() => setFiltersExpanded(true)}
+                  style={styles.moreCatsRow}
+                >
+                  <Text style={[styles.moreCatsText, styles.fw400]}>
+                    {catsCollapsed
+                      ? `Show ${categoriesInUse.length - MAX_CATS_COLLAPSED} more categories`
+                      : "Showing all categories"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+
               <View style={styles.divider} />
 
               <Text style={[styles.footerText, styles.fw400]}>
@@ -759,8 +712,96 @@ export default function MapPage() {
               <Text style={[styles.footerTextMuted, styles.fw400]}>
                 {selectedCats.size} / {categoriesInUse.length} categories
               </Text>
+            </ScrollView>
+          </View>
+        )}
+
+        {/* MOBILE: bottom sheet unchanged */}
+        {filtersOpen && isMobileLayout && (
+          <>
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => setFiltersOpen(false)}
+              style={styles.backdrop}
+            />
+
+            <View style={styles.bottomSheet}>
+              <View style={styles.sheetHandle} />
+
+              <ScrollView contentContainerStyle={{ paddingBottom: 14 }}>
+                <Text style={[styles.sheetTitle, styles.fw400]}>Filters</Text>
+
+                <View style={styles.sheetCard}>
+                  <Text style={[styles.sheetSectionTitle, styles.fw400]}>Show on Map</Text>
+
+                  <TouchableOpacity
+                    style={styles.checkRow}
+                    onPress={() => setShowCampaigns((v) => !v)}
+                  >
+                    <View style={[styles.checkbox, showCampaigns && styles.checkboxOn]}>
+                      <Text style={[styles.checkboxTick, styles.fw400]}>{showCampaigns ? "✓" : ""}</Text>
+                    </View>
+                    <Text style={[styles.checkLabel, styles.fw400]}>💰 Opportunities</Text>
+                    <View style={styles.countPill}>
+                      <Text style={[styles.countPillText, styles.fw400]}>{campaignPinCount}</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.checkRow, { marginTop: 10 }]}
+                    onPress={() => setShowBusinesses((v) => !v)}
+                  >
+                    <View style={[styles.checkbox, showBusinesses && styles.checkboxOn]}>
+                      <Text style={[styles.checkboxTick, styles.fw400]}>{showBusinesses ? "✓" : ""}</Text>
+                    </View>
+                    <Text style={[styles.checkLabel, styles.fw400]}>🏢 Businesses</Text>
+                    <View style={styles.countPill}>
+                      <Text style={[styles.countPillText, styles.fw400]}>{businessPinCount}</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.sheetCard}>
+                  <View style={styles.catsHeader}>
+                    <Text style={[styles.sheetSectionTitle, styles.fw400]}>Categories</Text>
+                    <View style={{ flexDirection: "row", gap: 14 }}>
+                      <TouchableOpacity onPress={selectAllCats}>
+                        <Text style={[styles.catsAction, styles.fw400]}>All</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={selectNoCats}>
+                        <Text style={[styles.catsAction, styles.fw400]}>None</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {categoriesInUse.map((cat) => {
+                    const active = selectedCats.has(cat);
+                    return (
+                      <TouchableOpacity key={cat} style={styles.catRow} onPress={() => toggleCategory(cat)}>
+                        <View style={[styles.checkbox, active && styles.checkboxOn]}>
+                          <Text style={[styles.checkboxTick, styles.fw400]}>{active ? "✓" : ""}</Text>
+                        </View>
+                        <View style={[styles.colorDot, { backgroundColor: colorForCategory(cat, "#2563eb") }]} />
+                        <Text style={[styles.catLabel, styles.fw400]}>{cat}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={[styles.footerText, styles.fw400]}>
+                  Showing: {shownCampaignCount} campaigns, {shownBusinessCount} businesses
+                </Text>
+                <Text style={[styles.footerTextMuted, styles.fw400]}>
+                  {selectedCats.size} / {categoriesInUse.length} categories
+                </Text>
+
+                <TouchableOpacity style={styles.sheetCloseBtn} onPress={() => setFiltersOpen(false)}>
+                  <Text style={[styles.sheetCloseText, styles.fw400]}>Done</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
-          ))}
+          </>
+        )}
 
         {/* Popup card */}
         {selectedPoint && (
@@ -828,27 +869,38 @@ const styles = StyleSheet.create({
   },
 
   // Search
-  searchBar: {
+   // ✅ NEW wrapper that limits top-left UI width so it never fights map controls
+  topControlsRow: {
     position: "absolute",
     top: 16,
     left: 16,
+    zIndex: 60,
+    // key part: responsive width but capped
+    width: "92%",
+    maxWidth: 520,
+    // also keep it away from the maplibre default top-right controls on small screens
+    paddingRight: 76,
+  },
+
+  // Search
+  searchBar: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
     borderRadius: 14,
     padding: 8,
-    gap: 10,
-    zIndex: 60,
-    width: 420,
-    maxWidth: "80%",
+    gap: 8,
+    width: "100%",
     shadowColor: "#000",
     shadowOpacity: 0.12,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
+
   searchInput: {
-    flex: 1,
+    flex: 1, // ✅ takes remaining space
+    minWidth: 0, // ✅ prevents weird overflow on web
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
@@ -857,16 +909,22 @@ const styles = StyleSheet.create({
     color: "#111827",
     backgroundColor: "#fff",
   },
+
+  // ✅ smaller buttons so they fit on any screen
   goBtn: {
     backgroundColor: Theme.colors.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 12,
+    minWidth: 56,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  goBtnText: { color: "#fff" },
+  goBtnText: { color: "#fff", fontSize: 13 },
+
   locateBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#e5e7eb",
@@ -874,12 +932,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  locateIcon: { fontSize: 18 },
+  locateIcon: { fontSize: 16 },
 
   // Toggle below search
   showFiltersBtn: {
     position: "absolute",
-    top: 78,
+    top: 90, // (slightly closer because bar is smaller)
     left: 16,
     zIndex: 70,
     backgroundColor: "#fff",
@@ -896,12 +954,10 @@ const styles = StyleSheet.create({
   },
   showFiltersText: { color: "#111827" },
 
-  // WEB panel
+  // ✅ WEB panel: now placed below the button, compact height + scroll
   filtersPanel: {
     position: "absolute",
-    top: 16,
-    right: 16,
-    zIndex: 65,
+    zIndex: 69,
     width: 360,
     maxWidth: "90%",
     backgroundColor: "#fff",
@@ -915,7 +971,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
+  panelHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
   filtersTitle: { fontSize: 16, color: "#111827" },
+  expandText: { color: Theme.colors.primary },
+  panelCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  panelCloseText: { color: "#111827" },
+
+  sectionTitle: { fontSize: 14, color: "#111827" },
 
   divider: {
     height: 1,
@@ -953,6 +1029,17 @@ const styles = StyleSheet.create({
   catRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
   colorDot: { width: 10, height: 10, borderRadius: 999 },
   catLabel: { color: "#111827" },
+
+  moreCatsRow: {
+    marginTop: 4,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+  },
+  moreCatsText: { color: "#334155" },
 
   footerText: { color: "#111827", marginTop: 2 },
   footerTextMuted: { color: "#6b7280", marginTop: 2 },

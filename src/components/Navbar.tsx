@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   useWindowDimensions,
+  Platform,
 } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { useAuth } from "../context/AuthContext";
@@ -15,6 +16,9 @@ import { MaterialIcons } from "@expo/vector-icons";
 // ✅ fallback signout (in case logout isn't exposed by your AuthContext)
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase/config";
+
+// ✅ Balance pill + dropdown
+import BalanceMenu from "./BalanceMenu";
 
 type NavItemKey =
   | "browse"
@@ -35,12 +39,13 @@ const MOBILE_BREAKPOINT = 860;
 const NavBar: React.FC<NavBarProps> = ({ active }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, logout, role } = useAuth() as any; // role optional in your setup
+  const { user, logout, role } = useAuth() as any;
   const { width } = useWindowDimensions();
 
   const isMobile = width < MOBILE_BREAKPOINT;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+const [closeSignal, setCloseSignal] = useState(0);
 
   const inferredActive: NavItemKey | undefined = (() => {
     if (pathname === "/") return "home";
@@ -55,11 +60,9 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
   })();
 
   const current = active ?? inferredActive;
-
   const isAdmin = role === "admin";
 
   const items = useMemo(() => {
-    // Public navbar (not logged in)
     if (!user) {
       return [
         { key: "home" as const, label: "Home", path: "/" },
@@ -67,7 +70,6 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
       ];
     }
 
-    // Logged in navbar
     const base = [
       { key: "browse" as const, label: "Browse", path: "/browse" },
       { key: "map" as const, label: "Map", path: "/map" },
@@ -85,26 +87,24 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
   const displayRole = (role || "Business") as string;
 
   const go = (path: string) => {
+    // ✅ if burger closes, also close the balance menu via its own internal state
+    // (we’ll also close burger here)
     setMobileOpen(false);
     router.push(path as any);
   };
 
-  // ✅ FIXED LOGOUT
   const handleLogout = async () => {
     if (loggingOut) return;
     try {
       setLoggingOut(true);
       setMobileOpen(false);
 
-      // Preferred: use your context logout if it exists
       if (typeof logout === "function") {
         await logout();
       } else {
-        // Fallback: always sign out of Firebase
         await signOut(auth);
       }
 
-      // After signOut, auth state will become null and gate/landing should update
       router.replace("/" as any);
     } catch (e) {
       console.error("Logout failed", e);
@@ -141,12 +141,7 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
                   onPress={() => go(item.path)}
                   style={[styles.navItem, isActive && styles.navItemActive]}
                 >
-                  <Text
-                    style={[
-                      styles.navItemText,
-                      isActive && styles.navItemTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.navItemText, isActive && styles.navItemTextActive]}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -155,56 +150,91 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
           </View>
         )}
 
-        {/* RIGHT: Desktop user controls OR mobile hamburger */}
-        {!isMobile ? (
-          <View style={styles.rightArea}>
-            {!user ? (
+        {/* RIGHT: controls */}
+        <View style={styles.rightArea}>
+          {!user ? (
+            !isMobile ? (
               <View style={styles.authButtons}>
                 <Pressable style={styles.secondaryBtn} onPress={() => go("/login?mode=login")}>
                   <Text style={styles.secondaryBtnText}>Log in</Text>
                 </Pressable>
-               <Pressable style={styles.primaryBtn} onPress={() => go("/login?mode=signup")}>
-                 <Text style={styles.primaryBtnText}>Sign up</Text>
-               </Pressable>
+                <Pressable style={styles.primaryBtn} onPress={() => go("/login?mode=signup")}>
+                  <Text style={styles.primaryBtnText}>Sign up</Text>
+                </Pressable>
               </View>
             ) : (
-              <>
-                <View style={styles.userChip}>
-                  <View style={styles.userAvatar}>
-                    <Text style={styles.userAvatarText}>
-                      {displayName.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View>
-                    <Text style={styles.userName}>
-                      {displayName.length > 18 ? displayName.slice(0, 16) + "…" : displayName}
-                    </Text>
-                    <Text style={styles.userRole}>{displayRole}</Text>
-                  </View>
-                </View>
+              <Pressable
+                onPress={() => setMobileOpen((v) => !v)}
+                style={styles.hamburger}
+              >
+                <MaterialIcons
+                  name={mobileOpen ? "close" : "menu"}
+                  size={24}
+                  color={Theme.colors.text}
+                />
+              </Pressable>
+            )
+          ) : (
+            <>
+              {/* ✅ Balance pill goes HERE (desktop + mobile), so it sits next to right controls */}
+{!isMobile && user && (
+  <BalanceMenu uid={user.uid} mode="inline" onOpenRequested={() => {}} />
+)}
 
+{/* Mobile (absolute next to burger) */}
+{isMobile && user && (
+  <BalanceMenu
+    uid={user.uid}
+    mode="absolute"
+    anchorTop={0}
+    anchorRight={0}
+    burgerSize={40}
+    gapToBurger={10}
+    closeSignal={closeSignal}
+    onOpenRequested={() => setMobileOpen(false)}
+  />
+)}
+              {/* Desktop: user chip + logout */}
+              {!isMobile ? (
+                <>
+                  <View style={styles.userChip}>
+                    <View style={styles.userAvatar}>
+                      <Text style={styles.userAvatarText}>
+                        {displayName.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text style={styles.userName}>
+                        {displayName.length > 18 ? displayName.slice(0, 16) + "…" : displayName}
+                      </Text>
+                      <Text style={styles.userRole}>{displayRole}</Text>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    style={[styles.logoutIconBtn, loggingOut && { opacity: 0.6 }]}
+                    onPress={handleLogout}
+                    disabled={loggingOut}
+                  >
+                    <MaterialIcons name="logout" size={18} color={Theme.colors.textMuted} />
+                  </Pressable>
+                </>
+              ) : (
+                // Mobile: burger button stays on the far right, pill is to its left in same row
                 <Pressable
-                  style={[styles.logoutIconBtn, loggingOut && { opacity: 0.6 }]}
-                  onPress={handleLogout}
-                  disabled={loggingOut}
+                  onPress={() => setMobileOpen((v) => !v)}
+                  style={styles.hamburger}
                 >
-                  <MaterialIcons name="logout" size={18} color={Theme.colors.textMuted} />
+                  <MaterialIcons
+                    name={mobileOpen ? "close" : "menu"}
+                    size={24}
+                    color={Theme.colors.text}
+                  />
                 </Pressable>
-              </>
-            )}
-          </View>
-        ) : (
-          <Pressable
-            onPress={() => setMobileOpen((v) => !v)}
-            style={styles.hamburger}
-          >
-            <MaterialIcons
-              name={mobileOpen ? "close" : "menu"}
-              size={24}
-              color={Theme.colors.text}
-            />
-          </Pressable>
-        )}
+              )}
+            </>
+          )}
+        </View>
       </View>
 
       {/* MOBILE: dropdown */}
@@ -219,12 +249,7 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
                   onPress={() => go(item.path)}
                   style={[styles.mobileItem, isActive && styles.mobileItemActive]}
                 >
-                  <Text
-                    style={[
-                      styles.mobileItemText,
-                      isActive && styles.mobileItemTextActive,
-                    ]}
-                  >
+                  <Text style={[styles.mobileItemText, isActive && styles.mobileItemTextActive]}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -232,39 +257,28 @@ const NavBar: React.FC<NavBarProps> = ({ active }) => {
             })}
           </View>
 
-          {!user ? (
-            <View style={styles.mobileAuthRow}>
-              <Pressable style={styles.secondaryBtnWide} onPress={() => go("/login?mode=login")}>
-                <Text style={styles.secondaryBtnText}>Log in</Text>
-              </Pressable>
-              <Pressable style={styles.primaryBtnWide} onPress={() => go("/login?mode=signup")}>
-                <Text style={styles.primaryBtnText}>Sign up</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.mobileFooter}>
-              <View style={styles.mobileUserRow}>
-                <View style={styles.userAvatar}>
-                  <Text style={styles.userAvatarText}>
-                    {displayName.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.userName}>{displayName}</Text>
-                  <Text style={styles.userRole}>{displayRole}</Text>
-                </View>
+          <View style={styles.mobileFooter}>
+            <View style={styles.mobileUserRow}>
+              <View style={styles.userAvatar}>
+                <Text style={styles.userAvatarText}>
+                  {displayName.charAt(0).toUpperCase()}
+                </Text>
               </View>
-
-              <Pressable
-                style={[styles.logoutWide, loggingOut && { opacity: 0.6 }]}
-                onPress={handleLogout}
-                disabled={loggingOut}
-              >
-                <MaterialIcons name="logout" size={18} color="#DC2626" />
-                <Text style={styles.logoutWideText}>Log out</Text>
-              </Pressable>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.userName}>{displayName}</Text>
+                <Text style={styles.userRole}>{displayRole}</Text>
+              </View>
             </View>
-          )}
+
+            <Pressable
+              style={[styles.logoutWide, loggingOut && { opacity: 0.6 }]}
+              onPress={handleLogout}
+              disabled={loggingOut}
+            >
+              <MaterialIcons name="logout" size={18} color="#DC2626" />
+              <Text style={styles.logoutWideText}>Log out</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </View>
@@ -282,6 +296,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1,
+    // ✅ IMPORTANT: allow dropdown to visually overflow the navbar on web
+    overflow: Platform.OS === "web" ? ("visible" as any) : "visible",
+    zIndex: 50,
   },
   inner: {
     maxWidth: 1200,
@@ -293,6 +310,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 12,
+    overflow: Platform.OS === "web" ? ("visible" as any) : "visible",
   },
 
   logoContainer: { flexDirection: "row", alignItems: "center" },
@@ -322,7 +340,13 @@ const styles = StyleSheet.create({
   navItemText: { fontSize: 13, color: Theme.colors.textMuted },
   navItemTextActive: { color: Theme.colors.primary, fontWeight: "600" },
 
-  rightArea: { flexDirection: "row", alignItems: "center", gap: 10 },
+  // ✅ keep everything on the right in one row
+  rightArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    overflow: Platform.OS === "web" ? ("visible" as any) : "visible",
+  },
 
   userChip: {
     flexDirection: "row",
@@ -406,26 +430,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   secondaryBtnText: { color: Theme.colors.text, fontWeight: "600", fontSize: 13 },
-
-  mobileAuthRow: { flexDirection: "row", gap: 10 },
-  primaryBtnWide: {
-    flex: 1,
-    backgroundColor: Theme.colors.primary,
-    paddingVertical: 12,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryBtnWide: {
-    flex: 1,
-    backgroundColor: Theme.colors.surface,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-    paddingVertical: 12,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-  },
 
   mobileFooter: { gap: 10, paddingTop: 6 },
   mobileUserRow: {

@@ -19,6 +19,8 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import { ensureUserWallet } from "../firebase/wallet";
+
 
 type UserRole = "admin" | "business" | "investor" | null;
 
@@ -80,25 +82,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       ref,
       async (snap) => {
         // If missing doc (Google login before profile creation, etc.), create it
-        if (!snap.exists()) {
-          try {
-            await setDoc(
-              ref,
-              {
-                email: user.email ?? null,
-                role: null,
-                createdAt: serverTimestamp(),
-              },
-              { merge: true }
-            );
-          } catch (e) {
-            // ignore; could be rules issue or offline – role will remain null
-            console.warn("Could not create users doc:", e);
-          }
-          setRole(null);
-          setRoleLoading(false);
-          return;
-        }
+       if (!snap.exists()) {
+  try {
+    await setDoc(
+      ref,
+      {
+        email: user.email ?? null,
+        role: null,
+        createdAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    // ✅ Safety: ensure wallet exists too
+    await ensureUserWallet(user.uid);
+  } catch (e) {
+    // ignore; could be rules issue or offline – role will remain null
+    console.warn("Could not create users doc / wallet:", e);
+  }
+  setRole(null);
+  setRoleLoading(false);
+  return;
+}
+
 
         const data = snap.data() as any;
         setRole((data?.role ?? null) as UserRole);

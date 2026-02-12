@@ -8,13 +8,17 @@ import { defineSecret } from "firebase-functions/params";
 initializeApp();
 const db = getFirestore();
 
-//Capcha code
+// ✅ Set your deployed region here (must match client getFunctions(app, region))
+const REGION = "us-central1";
 
+// ---------------------------------------------------------------------
+// Turnstile (unchanged, but pinned to region)
+// ---------------------------------------------------------------------
 const TURNSTILE_SECRET = defineSecret("TURNSTILE_SECRET");
 
 type VerifyTurnstileInput = {
   token: string;
-  action?: string; // optional label you can pass from client
+  action?: string;
 };
 
 type VerifyTurnstileResult = {
@@ -22,43 +26,30 @@ type VerifyTurnstileResult = {
 };
 
 export const verifyTurnstile = onCall<VerifyTurnstileInput>(
-  { secrets: [TURNSTILE_SECRET] },
-  async (request) => {
+  { region: REGION, secrets: [TURNSTILE_SECRET] },
+  async (request): Promise<VerifyTurnstileResult> => {
     const token = request.data?.token;
 
     if (!token || typeof token !== "string") {
       throw new HttpsError("invalid-argument", "Missing Turnstile token.");
     }
 
-    // Optional: you can enforce auth for some actions, but usually you want this
-    // to work BEFORE login too, so keep it unauthenticated.
-    // const uid = request.auth?.uid;
-
     const secret = TURNSTILE_SECRET.value();
     if (!secret) {
       throw new HttpsError("failed-precondition", "TURNSTILE_SECRET not set.");
     }
 
-    // Server-side validation endpoint (Cloudflare)
-    // https://challenges.cloudflare.com/turnstile/v0/siteverify :contentReference[oaicite:3]{index=3}
     const form = new URLSearchParams();
     form.set("secret", secret);
     form.set("response", token);
 
-    // Optional: add user IP if you have it (callable requests generally don’t expose it cleanly)
-    // form.set("remoteip", "x.x.x.x");
-
     let data: any;
     try {
-      const resp = await fetch(
-        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-        {
-          method: "POST",
-          headers: { "content-type": "application/x-www-form-urlencoded" },
-          body: form.toString(),
-        }
-      );
-
+      const resp = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+      });
       data = await resp.json();
     } catch (e) {
       console.error("Turnstile verification fetch failed:", e);
@@ -66,78 +57,96 @@ export const verifyTurnstile = onCall<VerifyTurnstileInput>(
     }
 
     const success = data?.success === true;
-
     if (!success) {
-      // You can log data["error-codes"] if needed
       console.warn("Turnstile failed:", data);
       throw new HttpsError("permission-denied", "Turnstile challenge failed.");
     }
-
-    // Optional: if you pass action from client, you can validate it here
-    // (Cloudflare may return `action` depending on mode/setup)
-    // if (request.data?.action && data?.action && data.action !== request.data.action) { ... }
 
     return { ok: true };
   }
 );
 
-
-
-type CreateLivePledgeInput = {
+// ---------------------------------------------------------------------
+// Pledges
+// ---------------------------------------------------------------------
+type CreatePledgeInput = {
   campaignId: string;
   amount: number;
 };
 
-type CreateLivePledgeResult = {
+type CreatePledgeResult = {
   pledgeId: string;
 };
 
-// 1) Callable: creates pledge + updates wallet (NOT campaign.raised)
-// Campaign.raised will be updated by trigger below (always consistent)
+function walletRefFor(uid: string) {
+  // ✅ NEW wallet location
+  return db.collection("users").doc(uid).collection("wallet").doc("main");
+}
+
+function assertPositiveAmount(amount: any) {
+  if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+    throw new HttpsError("invalid-argument", "amount must be a positive number.");
+  }
+}
+
+function assertCampaignId(campaignId: any) {
+  if (!campaignId || typeof campaignId !== "string") {
+    throw new HttpsError("invalid-argument", "campaignId is required.");
+  }
+}
+
+// -------------------------
+// LIVE pledge
+// -------------------------
 export const createLivePledge = onCall(
-  async (request: CallableRequest<CreateLivePledgeInput>): Promise<CreateLivePledgeResult> => {
+  { region: REGION },
+  async (request: CallableRequest<CreatePledgeInput>): Promise<CreatePledgeResult> => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "You must be logged in.");
 
     const { campaignId, amount } = request.data || ({} as any);
 
-    if (!campaignId || typeof campaignId !== "string") {
-      throw new HttpsError("invalid-argument", "campaignId is required.");
-    }
-    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
-      throw new HttpsError("invalid-argument", "amount must be a positive number.");
-    }
+    assertCampaignId(campaignId);
+    assertPositiveAmount(amount);
 
     const campaignRef = db.collection("campaigns").doc(campaignId);
-    const walletRef = db.collection("wallets").doc(uid);
+    const walletRef = walletRefFor(uid);
     const pledgesRef = db.collection("pledges");
 
     const result = await db.runTransaction(async (tx: Transaction) => {
-      const [campaignSnap, walletSnap] = await Promise.all([
-        tx.get(campaignRef),
-        tx.get(walletRef),
-      ]);
+      const [campaignSnap, walletSnap] = await Promise.all([tx.get(campaignRef), tx.get(walletRef)]);
 
-      if (!campaignSnap.exists) {
-        throw new HttpsError("not-found", "Campaign not found.");
-      }
+      if (!campaignSnap.exists) throw new HttpsError("not-found", "Campaign not found.");
 
       const campaign = campaignSnap.data() as any;
+      const status = String(campaign?.status ?? "").toLowerCase();
       const minInvestment = Number(campaign?.minInvestment ?? 0);
+      const goal = Number(campaign?.goal ?? 0);
+      const raised = Number(campaign?.raised ?? 0);
 
-      if (minInvestment && amount < minInvestment) {
+      if (status !== "active") {
+        throw new HttpsError("failed-precondition", "Campaign is not active.");
+      }
+
+      if (Number.isFinite(minInvestment) && minInvestment > 0 && amount < minInvestment) {
         throw new HttpsError("failed-precondition", `Minimum investment is ${minInvestment}.`);
       }
 
-      // Wallet
-      const walletData = walletSnap.exists ? (walletSnap.data() as any) : null;
-      const balance = Number(walletData?.liveBalance ?? 0);
+      // Capacity check for live pledges only
+      if (Number.isFinite(goal) && goal > 0) {
+        const remaining = Math.max(0, goal - (Number.isFinite(raised) ? raised : 0));
+        if (amount > remaining) {
+          throw new HttpsError("failed-precondition", "Amount exceeds remaining capacity.");
+        }
+      }
 
-      if (balance < amount) {
+      const walletData = walletSnap.exists ? (walletSnap.data() as any) : {};
+      const liveBalance = Number(walletData?.liveBalance ?? 0);
+
+      if (!Number.isFinite(liveBalance) || liveBalance < amount) {
         throw new HttpsError("failed-precondition", "Insufficient live balance.");
       }
 
-      // Create pledge doc
       const pledgeDoc = pledgesRef.doc();
       tx.set(pledgeDoc, {
         campaignId,
@@ -145,27 +154,23 @@ export const createLivePledge = onCall(
         amount,
         mode: "live",
         createdAt: FieldValue.serverTimestamp(),
-
-        // idempotency flags for triggers
         appliedToCampaign: false,
       });
 
-      // Update wallet balance
-      const newWallet = balance - amount;
-
-      if (walletSnap.exists) {
-        tx.update(walletRef, {
-          liveBalance: newWallet,
+      const newLive = liveBalance - amount; // already ensured >= 0
+      tx.set(
+        walletRef,
+        {
+          liveBalance: newLive,
+          demoBalance: Number(walletData?.demoBalance ?? 0),
           updatedAt: FieldValue.serverTimestamp(),
-        });
-      } else {
-        tx.set(walletRef, {
-          liveBalance: newWallet,
-          demoBalance: 0,
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
+          createdAt:
+            walletSnap.exists
+              ? walletData?.createdAt ?? FieldValue.serverTimestamp()
+              : FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
 
       return { pledgeId: pledgeDoc.id };
     });
@@ -174,43 +179,112 @@ export const createLivePledge = onCall(
   }
 );
 
-// 2) Trigger: whenever a pledge is created, increment campaign.raised exactly once
+// -------------------------
+// DEMO pledge
+// -------------------------
+export const createDemoPledge = onCall(
+  { region: REGION },
+  async (request: CallableRequest<CreatePledgeInput>): Promise<CreatePledgeResult> => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "You must be logged in.");
+
+    const { campaignId, amount } = request.data || ({} as any);
+
+    assertCampaignId(campaignId);
+    assertPositiveAmount(amount);
+
+    const campaignRef = db.collection("campaigns").doc(campaignId);
+    const walletRef = walletRefFor(uid);
+    const pledgesRef = db.collection("pledges");
+
+    const result = await db.runTransaction(async (tx: Transaction) => {
+      const [campaignSnap, walletSnap] = await Promise.all([tx.get(campaignRef), tx.get(walletRef)]);
+
+      if (!campaignSnap.exists) throw new HttpsError("not-found", "Campaign not found.");
+
+      const campaign = campaignSnap.data() as any;
+      const status = String(campaign?.status ?? "").toLowerCase();
+      const minInvestment = Number(campaign?.minInvestment ?? 0);
+
+      if (status !== "active") {
+        throw new HttpsError("failed-precondition", "Campaign is not active.");
+      }
+
+      if (Number.isFinite(minInvestment) && minInvestment > 0 && amount < minInvestment) {
+        throw new HttpsError("failed-precondition", `Minimum investment is ${minInvestment}.`);
+      }
+
+      const walletData = walletSnap.exists ? (walletSnap.data() as any) : {};
+      const demoBalance = Number(walletData?.demoBalance ?? 0);
+
+      if (!Number.isFinite(demoBalance) || demoBalance < amount) {
+        throw new HttpsError("failed-precondition", "Insufficient demo balance.");
+      }
+
+      const pledgeDoc = pledgesRef.doc();
+      tx.set(pledgeDoc, {
+        campaignId,
+        investorId: uid,
+        amount,
+        mode: "demo",
+        createdAt: FieldValue.serverTimestamp(),
+        appliedToCampaign: false,
+      });
+
+      const newDemo = demoBalance - amount;
+      tx.set(
+        walletRef,
+        {
+          demoBalance: newDemo,
+          liveBalance: Number(walletData?.liveBalance ?? 0),
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt:
+            walletSnap.exists
+              ? walletData?.createdAt ?? FieldValue.serverTimestamp()
+              : FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      return { pledgeId: pledgeDoc.id };
+    });
+
+    return result;
+  }
+);
+
+// -------------------------
+// Trigger: apply pledge to campaign (live -> raised, demo -> demoRaised)
+// -------------------------
 export const applyPledgeToCampaignRaised = onDocumentCreated(
-  "pledges/{pledgeId}",
+  { region: REGION, document: "pledges/{pledgeId}" },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
 
     const pledge = snap.data() as any;
 
-    // only count live pledges
-    if (pledge?.mode !== "live") return;
-
+    const mode = String(pledge?.mode ?? "");
     const campaignId = String(pledge?.campaignId ?? "");
     const amount = Number(pledge?.amount ?? 0);
-    const alreadyApplied = Boolean(pledge?.appliedToCampaign);
 
     if (!campaignId || !Number.isFinite(amount) || amount <= 0) return;
-    if (alreadyApplied) return; // idempotent
+    if (mode !== "live" && mode !== "demo") return;
 
     const pledgeRef = snap.ref;
     const campaignRef = db.collection("campaigns").doc(campaignId);
 
     await db.runTransaction(async (tx) => {
-      const [pledgeSnap, campaignSnap] = await Promise.all([
-        tx.get(pledgeRef),
-        tx.get(campaignRef),
-      ]);
+      const [pledgeSnap, campaignSnap] = await Promise.all([tx.get(pledgeRef), tx.get(campaignRef)]);
+      if (!pledgeSnap.exists || !campaignSnap.exists) return;
 
-      if (!pledgeSnap.exists) return;
       const latest = pledgeSnap.data() as any;
-
-      // Re-check inside transaction
       if (latest?.appliedToCampaign) return;
-      if (!campaignSnap.exists) return;
+
+      const incField = mode === "live" ? "raised" : "demoRaised";
 
       tx.update(campaignRef, {
-        raised: FieldValue.increment(amount),
+        [incField]: FieldValue.increment(amount), // ✅ creates demoRaised if missing
         updatedAt: FieldValue.serverTimestamp(),
       });
 
