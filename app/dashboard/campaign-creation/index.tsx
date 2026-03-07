@@ -1,4 +1,4 @@
-// app/dashboard/createCampaign.tsx
+// app/dashboard/index.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -20,16 +20,20 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-import Screen from "../../src/components/ui/Screen";
-import Card from "../../src/components/ui/Card";
-import TextField from "../../src/components/ui/TextField";
-import Button from "../../src/components/ui/Button";
+import Screen from "../../../src/components/ui/Screen";
+import Card from "../../../src/components/ui/Card";
+import TextField from "../../../src/components/ui/TextField";
+import Button from "../../../src/components/ui/Button";
+import AdditionalInformationSection, {
+  AttachmentItem,
+} from "./additionalInformationSection";
+import DeadlineField from "./deadlineField";
 import LocationPickerModal, {
   PickedLocation,
-} from "../../src/components/LocationPickerModal";
-import { Theme } from "../../src/styles/Theme";
-import { db } from "../../src/firebase/config";
-import { useAuth } from "../../src/context/AuthContext";
+} from "../../../src/components/LocationPickerModal";
+import { Theme } from "../../../src/styles/Theme";
+import { db } from "../../../src/firebase/config";
+import { useAuth } from "../../../src/context/AuthContext";
 
 interface Business {
   id: string;
@@ -46,11 +50,20 @@ const CATEGORIES = [
   "Other",
 ];
 
+// TODO: add file support
+
 const RISK_LEVELS = ["Low", "Medium", "High"];
 
-export default function CreateCampaign() {
+
+
+
+export default function Index() {
   const router = useRouter();
   const { user } = useAuth();
+  const [additionalInfoText, setAdditionalInfoText] = useState("");
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [deadlineDate, setDeadlineDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const notify = (title: string, message: string) => {
     if (Platform.OS === "web") {
@@ -90,6 +103,15 @@ export default function CreateCampaign() {
     latitude: number;
     longitude: number;
   } | null>(null);
+  const goalNum = Number(goal) || 0;
+  const aprNum = Number(apr) || 0;
+  const termNum = Number(termMonths) || 0;
+
+
+  const finalRepayment =
+      goalNum > 0 && aprNum > 0 && termNum > 0
+          ? goalNum * (1 + (aprNum / 100) * (termNum / 12))
+          : 0;
 
   useEffect(() => {
     const loadBusinesses = async () => {
@@ -155,10 +177,12 @@ export default function CreateCampaign() {
       return false;
     }
 
-    const goalNum = Number(goal);
     const minNum = Number(minInvestment);
-    const aprNum = Number(apr);
-    const termNum = Number(termMonths);
+    const goalNum = Number(goal) || 0;
+    const aprNum = Number(apr) || 0;
+    const termNum = Number(termMonths) || 0;
+
+
 
     if (!goalNum || goalNum <= 0) {
       notify("Invalid goal", "Funding goal must be a positive number.");
@@ -176,8 +200,8 @@ export default function CreateCampaign() {
       notify("Invalid loan term", "Loan term must be a positive number of months.");
       return false;
     }
-    if (!deadline.trim()) {
-      notify("Deadline required", "Please enter a campaign deadline.");
+    if (!deadlineDate) {
+      notify("Deadline required", "Please select a campaign deadline.");
       return false;
     }
 
@@ -287,6 +311,36 @@ export default function CreateCampaign() {
             </View>
           )}
 
+          {/* CATEGORY */}
+          <Text style={styles.label }>Category *</Text>
+          <TouchableOpacity
+              style={[styles.dropdown,
+                {
+                  marginBottom: Theme.spacing.md,
+                }]}
+              onPress={() => setCategoryOpen((v) => !v)}
+          >
+            <Text style={styles.dropdownText}>{category ?? "Select category"}</Text>
+          </TouchableOpacity>
+
+          {categoryOpen && (
+              <View style={styles.dropdownList}>
+                {CATEGORIES.map((c) => (
+                    <TouchableOpacity
+                        key={c}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setCategory(c);
+                          setCategoryOpen(false);
+                        }}
+                    >
+                      <Text style={styles.dropdownItemText}>{c}</Text>
+                    </TouchableOpacity>
+                ))}
+              </View>
+          )}
+
+          {/* OVERVIEW */}
           <TextField
             label="Campaign Title *"
             placeholder="e.g., Expand Our Manufacturing Facility"
@@ -295,12 +349,26 @@ export default function CreateCampaign() {
           />
 
           <TextField
-            label="Description *"
-            placeholder="Describe what you'll use the funds for..."
-            value={desc}
-            onChangeText={setDesc}
-            multiline
-            style={{ height: 100, textAlignVertical: "top" }}
+              label="Description *"
+              placeholder="Describe what you'll use the funds for..."
+              value={desc}
+              onChangeText={setDesc}
+              multiline
+              style={{ height: 100, textAlignVertical: "top" }}
+          />
+
+          <TextField
+              label="Campaign Image (URL)"
+              placeholder="Paste image URL (optional)"
+              value={imageUrl}
+              onChangeText={setImageUrl}
+          /> {/* TODO: upload images*/}
+
+          <AdditionalInformationSection
+              additionalInfoText={additionalInfoText}
+              setAdditionalInfoText={setAdditionalInfoText}
+              attachments={attachments}
+              setAttachments={setAttachments}
           />
 
           {/* Address is auto-filled from the map */}
@@ -330,58 +398,6 @@ export default function CreateCampaign() {
             onPress={() => setLocationModalVisible(true)}
           />
 
-          {/* CATEGORY */}
-          <Text style={styles.label}>Category *</Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => setCategoryOpen((v) => !v)}
-          >
-            <Text style={styles.dropdownText}>{category ?? "Select category"}</Text>
-          </TouchableOpacity>
-
-          {categoryOpen && (
-            <View style={styles.dropdownList}>
-              {CATEGORIES.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setCategory(c);
-                    setCategoryOpen(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>{c}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* RISK */}
-          <Text style={[styles.label, { marginTop: Theme.spacing.md }]}>Risk Level *</Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => setRiskOpen((v) => !v)}
-          >
-            <Text style={styles.dropdownText}>{riskLevel ?? "Select risk level"}</Text>
-          </TouchableOpacity>
-
-          {riskOpen && (
-            <View style={styles.dropdownList}>
-              {RISK_LEVELS.map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setRiskLevel(r);
-                    setRiskOpen(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>{r}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
           {/* FINANCIALS */}
           <TextField
             label="Funding Goal ($) *"
@@ -404,6 +420,12 @@ export default function CreateCampaign() {
             onChangeText={setApr}
             keyboardType="numeric"
           />
+          <View style={styles.calculationBox}>
+            <Text style={styles.calculationLabel}>Estimated Final Repayment</Text>
+            <Text style={styles.calculationValue}>
+              ${finalRepayment.toFixed(2)}
+            </Text>
+          </View>
           <TextField
             label="Loan Term (Months) *"
             placeholder="12"
@@ -411,17 +433,13 @@ export default function CreateCampaign() {
             onChangeText={setTermMonths}
             keyboardType="numeric"
           />
-          <TextField
-            label="Campaign Deadline *"
-            placeholder="mm/dd/yyyy"
-            value={deadline}
-            onChangeText={setDeadline}
-          />
-          <TextField
-            label="Campaign Image (URL)"
-            placeholder="Paste image URL (optional)"
-            value={imageUrl}
-            onChangeText={setImageUrl}
+
+          <DeadlineField
+              deadlineDate={deadlineDate}
+              setDeadlineDate={setDeadlineDate}
+              showDatePicker={showDatePicker}
+              setShowDatePicker={setShowDatePicker}
+              styles={styles}
           />
 
           <View style={styles.actions}>
@@ -508,4 +526,22 @@ const styles = StyleSheet.create({
   },
   dot: { width: 10, height: 10, borderRadius: 999 },
   locationText: { ...Theme.typography.subtitle, color: "#000" },
+  calculationBox: {
+    marginTop: Theme.spacing.sm,
+    marginBottom: Theme.spacing.md,
+    padding: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: Theme.radii.md,
+    backgroundColor: Theme.colors.surface,
+  },
+  calculationLabel: {
+    ...Theme.typography.label,
+    color: "#000",
+    marginBottom: 4,
+  },
+  calculationValue: {
+    ...Theme.typography.title,
+    color: "#000",
+  },
 });
