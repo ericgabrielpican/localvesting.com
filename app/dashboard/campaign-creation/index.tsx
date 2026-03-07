@@ -27,6 +27,7 @@ import Button from "../../../src/components/ui/Button";
 import AdditionalInformationSection, {
   AttachmentItem,
 } from "./additionalInformationSection";
+import DeadlineField from "./deadlineField";
 import LocationPickerModal, {
   PickedLocation,
 } from "../../../src/components/LocationPickerModal";
@@ -53,11 +54,16 @@ const CATEGORIES = [
 
 const RISK_LEVELS = ["Low", "Medium", "High"];
 
+
+
+
 export default function Index() {
   const router = useRouter();
   const { user } = useAuth();
   const [additionalInfoText, setAdditionalInfoText] = useState("");
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [deadlineDate, setDeadlineDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const notify = (title: string, message: string) => {
     if (Platform.OS === "web") {
@@ -194,8 +200,8 @@ export default function Index() {
       notify("Invalid loan term", "Loan term must be a positive number of months.");
       return false;
     }
-    if (!deadline.trim()) {
-      notify("Deadline required", "Please enter a campaign deadline.");
+    if (!deadlineDate) {
+      notify("Deadline required", "Please select a campaign deadline.");
       return false;
     }
 
@@ -356,7 +362,7 @@ export default function Index() {
               placeholder="Paste image URL (optional)"
               value={imageUrl}
               onChangeText={setImageUrl}
-          />
+          /> {/* TODO: upload images*/}
 
           <AdditionalInformationSection
               additionalInfoText={additionalInfoText}
@@ -391,33 +397,6 @@ export default function Index() {
             variant="secondary"
             onPress={() => setLocationModalVisible(true)}
           />
-
-
-          {/* RISK */}
-          <Text style={[styles.label, { marginTop: Theme.spacing.md }]}>Risk Level *</Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => setRiskOpen((v) => !v)}
-          >
-            <Text style={styles.dropdownText}>{riskLevel ?? "Select risk level"}</Text>
-          </TouchableOpacity>
-
-          {riskOpen && (
-            <View style={styles.dropdownList}>
-              {RISK_LEVELS.map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setRiskLevel(r);
-                    setRiskOpen(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>{r}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
 
           {/* FINANCIALS */}
           <TextField
@@ -454,11 +433,13 @@ export default function Index() {
             onChangeText={setTermMonths}
             keyboardType="numeric"
           />
-          <TextField
-            label="Campaign Deadline *"
-            placeholder="mm/dd/yyyy"
-            value={deadline}
-            onChangeText={setDeadline}
+
+          <DeadlineField
+              deadlineDate={deadlineDate}
+              setDeadlineDate={setDeadlineDate}
+              showDatePicker={showDatePicker}
+              setShowDatePicker={setShowDatePicker}
+              styles={styles}
           />
 
           <View style={styles.actions}>
