@@ -23,7 +23,7 @@ export default function AboutPage() {
   const isMobile = width < 768;
 
   const goCreateAccount = () => {
-    router.push("/login" as any);
+    router.push("/login?mode=signup" as any);
   };
 
   return (

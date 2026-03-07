@@ -20,7 +20,7 @@ export default function LandingPage() {
     if (user) {
       router.push("/browse" as any);
     } else {
-      router.push("/login" as any);
+      router.push("/login?mode=signup" as any);
     }
   };
 
@@ -57,7 +57,7 @@ export default function LandingPage() {
                 </Text>
               </Pressable>
 
-              <Pressable style={styles.secondaryButton} onPress={goLogin}>
+              <Pressable style={styles.secondaryButton} onPress={goPrimary}>
                 <Text style={styles.secondaryButtonLabel}>
                   Let's use a demo
                 </Text>
