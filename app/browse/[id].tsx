@@ -13,7 +13,7 @@ import {
   UIManager,
   useWindowDimensions,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   doc,
   onSnapshot,
@@ -48,12 +48,16 @@ const RECENT_OVERFETCH = 80;
 const RECENT_PREVIEW_COUNT = 3;
 const DESC_COLLAPSE_AT = 220;
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 export default function CampaignDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const { user } = useAuth() as any;
   const { width } = useWindowDimensions();
 
@@ -65,7 +69,6 @@ export default function CampaignDetail() {
   const [amount, setAmount] = useState("");
   const [pledging, setPledging] = useState(false);
 
-  // ✅ Wallet state (users/{uid}/wallet/main)
   const [walletLoading, setWalletLoading] = useState(true);
   const [walletLive, setWalletLive] = useState<number>(0);
   const [walletDemo, setWalletDemo] = useState<number>(0);
@@ -81,11 +84,9 @@ export default function CampaignDetail() {
 
   const [descExpanded, setDescExpanded] = useState(false);
 
-  // Web-only sticky pledge panel. Mobile = inline after Description (no overlay).
   const isWeb = Platform.OS === "web";
   const isWebWide = isWeb && width >= 860;
 
-  // 1) Realtime campaign
   useEffect(() => {
     if (!campaignId) return;
 
@@ -107,7 +108,6 @@ export default function CampaignDetail() {
     return () => unsub();
   }, [campaignId]);
 
-  // 2) Realtime wallet (users/{uid}/wallet/main)
   useEffect(() => {
     if (!user?.uid) {
       setWalletLive(0);
@@ -147,7 +147,6 @@ export default function CampaignDetail() {
     return () => unsub();
   }, [user?.uid]);
 
-  // 3) Recent pledges (avoid composite index prompt)
   useEffect(() => {
     if (!campaignId) return;
 
@@ -182,14 +181,15 @@ export default function CampaignDetail() {
         console.error("recent pledges snapshot error:", err);
         setRecentPledges([]);
         setRecentLoading(false);
-        setRecentError((err as any)?.message || "Could not load recent investments.");
+        setRecentError(
+          (err as any)?.message || "Could not load recent investments."
+        );
       }
     );
 
     return () => unsub();
   }, [campaignId]);
 
-  // 4) Resolve display names from users/{uid}.name (cached)
   useEffect(() => {
     const missing = Array.from(
       new Set(
@@ -213,7 +213,9 @@ export default function CampaignDetail() {
               const data: any = snap.data();
               const raw = data?.name;
               const name =
-                typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : "";
+                typeof raw === "string" && raw.trim().length > 0
+                  ? raw.trim()
+                  : "";
               return [uid, name] as const;
             } catch {
               return [uid, ""] as const;
@@ -249,7 +251,6 @@ export default function CampaignDetail() {
     return Math.max(0, goal - raised);
   }, [goal, raised]);
 
-  // ✅ Real pct splits
   const liveProgressPct = useMemo(() => {
     if (!Number.isFinite(goal) || goal <= 0) return 0;
     return Math.min(100, Math.max(0, (raised / goal) * 100));
@@ -260,23 +261,19 @@ export default function CampaignDetail() {
     return Math.min(100, Math.max(0, (demoRaised / goal) * 100));
   }, [goal, demoRaised]);
 
-  // ✅ Deterministic social proof (0..25)
   const socialBasePct = useMemo(() => {
     return pseudoRandomPctFromId(campaignId, 25);
   }, [campaignId]);
 
-  // ✅ Cap to 100 total. Social gets reduced first if needed.
   const socialShownPct = useMemo(() => {
     const maxSocial = Math.max(0, 100 - (liveProgressPct + demoProgressPct));
     return Math.min(socialBasePct, maxSocial);
   }, [socialBasePct, liveProgressPct, demoProgressPct]);
 
-  // ✅ Live segment includes social + live
   const liveShownPct = useMemo(() => {
     return Math.min(100, socialShownPct + liveProgressPct);
   }, [socialShownPct, liveProgressPct]);
 
-  // ✅ Demo sits after live
   const demoShownPct = useMemo(() => {
     const remainingForDemo = Math.max(0, 100 - liveShownPct);
     return Math.min(demoProgressPct, remainingForDemo);
@@ -299,14 +296,22 @@ export default function CampaignDetail() {
     if (status !== "active") return false;
     if (Number.isFinite(minInv) && parsedAmount < minInv) return false;
 
-    // Capacity check only for LIVE pledges (demo can exceed goal)
     if (walletType === "live") {
       if (remaining !== null && parsedAmount > remaining) return false;
     }
 
     if (selectedBalance < parsedAmount) return false;
     return true;
-  }, [user, pledging, parsedAmount, status, minInv, remaining, selectedBalance, walletType]);
+  }, [
+    user,
+    pledging,
+    parsedAmount,
+    status,
+    minInv,
+    remaining,
+    selectedBalance,
+    walletType,
+  ]);
 
   const pledge = async () => {
     if (!user) {
@@ -323,10 +328,10 @@ export default function CampaignDetail() {
     try {
       setPledging(true);
 
-      const fnName = walletType === "live" ? "createLivePledge" : "createDemoPledge";
+      const fnName =
+        walletType === "live" ? "createLivePledge" : "createDemoPledge";
       const fn = httpsCallable(functions, fnName);
 
-      // backend ignores walletType in your current callable input types, but safe to send
       await fn({ campaignId, amount: amt, walletType });
 
       Alert.alert("Success", "Pledge confirmed!");
@@ -428,7 +433,9 @@ export default function CampaignDetail() {
           )}
         </Text>
 
-        <Text style={styles.walletHint}>Choose which balance to use for this pledge:</Text>
+        <Text style={styles.walletHint}>
+          Choose which balance to use for this pledge:
+        </Text>
 
         {BalanceToggle}
 
@@ -472,8 +479,12 @@ export default function CampaignDetail() {
         <Text style={styles.disabledHint}>
           {user
             ? selectedBalance < parsedAmount
-              ? `Not enough ${walletType === "live" ? "balance" : "demo balance"}.`
-              : walletType === "live" && remaining !== null && parsedAmount > remaining
+              ? `Not enough ${
+                  walletType === "live" ? "balance" : "demo balance"
+                }.`
+              : walletType === "live" &&
+                remaining !== null &&
+                parsedAmount > remaining
               ? "Amount exceeds remaining capacity."
               : minInv > 0 && parsedAmount > 0 && parsedAmount < minInv
               ? "Amount below minimum investment."
@@ -512,8 +523,33 @@ export default function CampaignDetail() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.layout}>
-            {/* LEFT: main content */}
             <View style={styles.leftCol}>
+              <View style={styles.topNavRow}>
+                <Pressable
+                  onPress={() => router.push("/browse" as any)}
+                  style={styles.backButton}
+                >
+                  <Text style={styles.backButtonText}>← Back</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    if (campaign?.businessId) {
+                      router.push(`/mybusinesses/${campaign.businessId}` as any);
+                    }
+                  }}
+                  style={[
+                    styles.visitBusinessButton,
+                    !campaign?.businessId && { opacity: 0.5 },
+                  ]}
+                  disabled={!campaign?.businessId}
+                >
+                  <Text style={styles.visitBusinessButtonText}>
+                    Visit {campaign?.businessName || "business"}'s profile
+                  </Text>
+                </Pressable>
+              </View>
+
               <Card>
                 <Text style={styles.title}>{campaign.title}</Text>
                 <Text style={styles.subtitle}>{campaign.category}</Text>
@@ -530,57 +566,81 @@ export default function CampaignDetail() {
                     ) : null}
                   </Text>
 
-                  {/* ✅ Stacked progress bar (ghost + live + demo) */}
                   <View style={styles.progressTrack}>
-                    <View style={[styles.progressGhost, { width: `${socialShownPct}%` }]} />
-                    <View style={[styles.progressLive, { width: `${liveShownPct}%` }]} />
+                    <View
+                      style={[
+                        styles.progressGhost,
+                        { width: `${socialShownPct}%` },
+                      ]}
+                    />
+                    <View
+                      style={[
+                        styles.progressLive,
+                        { width: `${liveShownPct}%` },
+                      ]}
+                    />
                     <View
                       style={[
                         styles.progressDemo,
-                        { left: `${liveShownPct}%`, width: `${demoShownPct}%` },
+                        {
+                          left: `${liveShownPct}%`,
+                          width: `${demoShownPct}%`,
+                        },
                       ]}
                     />
                   </View>
 
                   <Text style={styles.metaSmall}>
-                    Live: <Text style={styles.metaStrong}>{formatMoney(raised)}</Text> • Demo:{" "}
+                    Live: <Text style={styles.metaStrong}>{formatMoney(raised)}</Text>{" "}
+                    • Demo:{" "}
                     <Text style={styles.metaStrong}>{formatMoney(demoRaised)}</Text>
-                   
                     {remaining !== null ? (
                       <>
                         {" "}
                         • Remaining:{" "}
-                        <Text style={styles.metaStrong}>{formatMoney(remaining)}</Text>
+                        <Text style={styles.metaStrong}>
+                          {formatMoney(remaining)}
+                        </Text>
                       </>
-                    ) : null}  
-                  </Text>
-
-                  
-                  <Text style={styles.metaSmall}>
-                   Status: <Text style={styles.metaStrong}>{status || "unknown"}</Text>
-
-                </Text>
-
-                  <Text style={styles.metaSmall}>
-                    APR: <Text style={styles.metaStrong}>{formatApr(campaign.apr)}</Text> • Min:{" "}
-                    <Text style={styles.metaStrong}>{formatMoney(minInv)}</Text> • Term:{" "}
-                    <Text style={styles.metaStrong}>{campaign.termMonths ?? "-"} mo</Text>
+                    ) : null}
                   </Text>
 
                   <Text style={styles.metaSmall}>
-                    Progress shown: <Text style={styles.metaStrong}>{totalShownPct.toFixed(0)}%</Text>{" "}
-                    {/* (live: <Text style={styles.metaStrong}>{liveProgressPct.toFixed(0)}%</Text>, demo:{" "} */}
-                    {/* <Text style={styles.metaStrong}>{demoProgressPct.toFixed(0)}%</Text>) */}
+                    Status:{" "}
+                    <Text style={styles.metaStrong}>{status || "unknown"}</Text>
+                  </Text>
+
+                  <Text style={styles.metaSmall}>
+                    APR:{" "}
+                    <Text style={styles.metaStrong}>
+                      {formatApr(campaign.apr)}
+                    </Text>{" "}
+                    • Min:{" "}
+                    <Text style={styles.metaStrong}>{formatMoney(minInv)}</Text> •
+                    Term:{" "}
+                    <Text style={styles.metaStrong}>
+                      {campaign.termMonths ?? "-"} mo
+                    </Text>
+                  </Text>
+
+                  <Text style={styles.metaSmall}>
+                    Progress shown:{" "}
+                    <Text style={styles.metaStrong}>
+                      {totalShownPct.toFixed(0)}%
+                    </Text>
                   </Text>
                 </View>
               </Card>
 
-              {/* Description */}
               <Card>
                 <View style={styles.descHeaderRow}>
                   <Text style={styles.section}>Description</Text>
                   {descShouldCollapse ? (
-                    <Pressable onPress={toggleDesc} hitSlop={10} style={styles.chevBtn}>
+                    <Pressable
+                      onPress={toggleDesc}
+                      hitSlop={10}
+                      style={styles.chevBtn}
+                    >
                       <Text style={styles.chev}>{descExpanded ? "▲" : "▼"}</Text>
                     </Pressable>
                   ) : null}
@@ -593,15 +653,15 @@ export default function CampaignDetail() {
                     <Text style={styles.descMoreText}>
                       {descExpanded ? "Show less" : "Show more"}
                     </Text>
-                    <Text style={styles.descMoreText}>{descExpanded ? "▲" : "▼"}</Text>
+                    <Text style={styles.descMoreText}>
+                      {descExpanded ? "▲" : "▼"}
+                    </Text>
                   </Pressable>
                 ) : null}
               </Card>
 
-              {/* ✅ MOBILE: pledge panel inline AFTER description */}
               {!isWebWide ? PledgePanel : null}
 
-              {/* Recent investments */}
               <Card>
                 <Text style={styles.section}>Recent investments</Text>
 
@@ -614,15 +674,15 @@ export default function CampaignDetail() {
                 ) : (
                   <View style={styles.bubblesWrap}>
                     {recentToShow.map((p) => {
-                    const nameFromUserDoc = nameCache[p.investorId];
+                      const nameFromUserDoc = nameCache[p.investorId];
 
-const baseName =
-  typeof nameFromUserDoc === "string" &&
-  nameFromUserDoc.trim().length > 0
-    ? nameFromUserDoc.trim()
-    : "User";
+                      const baseName =
+                        typeof nameFromUserDoc === "string" &&
+                        nameFromUserDoc.trim().length > 0
+                          ? nameFromUserDoc.trim()
+                          : "User";
 
-const displayName = censorShort(baseName);
+                      const displayName = censorShort(baseName);
 
                       const dateLabel = formatDate(p.createdAt);
 
@@ -643,7 +703,10 @@ const displayName = censorShort(baseName);
                     })}
 
                     {recentPledges.length > RECENT_PREVIEW_COUNT ? (
-                      <Pressable onPress={toggleSeeMore} style={styles.seeMoreBubble}>
+                      <Pressable
+                        onPress={toggleSeeMore}
+                        style={styles.seeMoreBubble}
+                      >
                         <Text style={styles.seeMoreBubbleText}>
                           {seeAllRecent ? "See less" : "See more"}
                         </Text>
@@ -653,7 +716,9 @@ const displayName = censorShort(baseName);
                 )}
 
                 {!!recentError ? (
-                  <Text style={[styles.metaSmall, { marginTop: 10 }]}>{recentError}</Text>
+                  <Text style={[styles.metaSmall, { marginTop: 10 }]}>
+                    {recentError}
+                  </Text>
                 ) : (
                   <Text style={[styles.metaSmall, { marginTop: 10 }]}>
                     (Names are partially hidden for privacy.)
@@ -662,7 +727,6 @@ const displayName = censorShort(baseName);
               </Card>
             </View>
 
-            {/* RIGHT: sticky pledge panel on wide web only */}
             {isWebWide ? (
               <View style={styles.rightCol}>
                 <View style={styles.stickyWrap}>{PledgePanel}</View>
@@ -697,12 +761,6 @@ function formatDate(ts?: Timestamp | null) {
   });
 }
 
-function maskUid(uid: string) {
-  if (!uid) return "User";
-  const head = uid.slice(0, 3);
-  return `${head}***`;
-}
-
 function censorShort(name: string) {
   const s = String(name || "").trim();
   if (!s) return "User***";
@@ -710,10 +768,9 @@ function censorShort(name: string) {
   return `${head}***`;
 }
 
-// ✅ deterministic pseudo-random 0..maxPct based on campaignId string
 function pseudoRandomPctFromId(id: string, maxPct: number) {
   if (!id) return 0;
-  let h = 2166136261; // FNV-ish
+  let h = 2166136261;
   for (let i = 0; i < id.length; i++) {
     h ^= id.charCodeAt(i);
     h = Math.imul(h, 16777619);
@@ -765,20 +822,75 @@ const styles = StyleSheet.create({
         } as any)
       : ({} as any),
 
-  title: { ...Theme.typography.title, marginBottom: Theme.spacing.sm, fontWeight: "400" as any },
+  topNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 2,
+  },
+
+  backButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0F172A",
+  },
+
+  visitBusinessButton: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: Theme.colors.primary,
+    alignItems: "center",
+  },
+
+  visitBusinessButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+
+  title: {
+    ...Theme.typography.title,
+    marginBottom: Theme.spacing.sm,
+    fontWeight: "400" as any,
+  },
   subtitle: {
     ...Theme.typography.subtitle,
     marginBottom: Theme.spacing.md,
     fontWeight: "400" as any,
   },
 
-  section: { ...Theme.typography.title, marginBottom: Theme.spacing.md, fontWeight: "400" as any },
+  section: {
+    ...Theme.typography.title,
+    marginBottom: Theme.spacing.md,
+    fontWeight: "400" as any,
+  },
 
-  meta: { fontSize: 13, color: Theme.colors.textMuted, fontWeight: "400" as any },
-  metaSmall: { fontSize: 12, color: Theme.colors.textMuted, marginTop: 6, fontWeight: "400" as any },
+  meta: {
+    fontSize: 13,
+    color: Theme.colors.textMuted,
+    fontWeight: "400" as any,
+  },
+  metaSmall: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    marginTop: 6,
+    fontWeight: "400" as any,
+  },
   metaStrong: { fontWeight: "400", color: Theme.colors.text },
 
-  // ✅ Stacked progress bar styles
   progressTrack: {
     height: 10,
     borderRadius: 999,
@@ -792,23 +904,27 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#FEF3C7", // pale amber
+    backgroundColor: "#FEF3C7",
   },
   progressLive: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#F59E0B", // amber (live)
+    backgroundColor: "#F59E0B",
   },
   progressDemo: {
     position: "absolute",
     top: 0,
     bottom: 0,
-    backgroundColor: "#60A5FA", // blue (demo)
+    backgroundColor: "#60A5FA",
   },
 
-  descHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  descHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   desc: { ...Theme.typography.body, fontWeight: "400" as any },
 
   chevBtn: {
@@ -819,7 +935,11 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.border,
     backgroundColor: Theme.colors.surface,
   },
-  chev: { fontSize: 12, color: Theme.colors.textMuted, fontWeight: "400" as any },
+  chev: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    fontWeight: "400" as any,
+  },
 
   descMoreRow: {
     marginTop: 10,
@@ -834,7 +954,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: Theme.colors.surface,
   },
-  descMoreText: { fontSize: 12, color: Theme.colors.textMuted, fontWeight: "400" as any },
+  descMoreText: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    fontWeight: "400" as any,
+  },
 
   walletBox: {
     borderWidth: 1,
@@ -844,8 +968,17 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
   },
-  walletText: { fontSize: 13, color: Theme.colors.textMuted, fontWeight: "400" as any },
-  walletHint: { fontSize: 12, color: Theme.colors.textMuted, marginTop: 8, fontWeight: "400" as any },
+  walletText: {
+    fontSize: 13,
+    color: Theme.colors.textMuted,
+    fontWeight: "400" as any,
+  },
+  walletHint: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    marginTop: 8,
+    fontWeight: "400" as any,
+  },
 
   balanceToggleRow: {
     marginTop: 10,
@@ -876,8 +1009,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  helper: { fontSize: 12, color: Theme.colors.textMuted, marginTop: 6, marginBottom: 10, fontWeight: "400" as any },
-  disabledHint: { fontSize: 12, color: "#B45309", marginTop: 10, fontWeight: "400" as any },
+  helper: {
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    marginTop: 6,
+    marginBottom: 10,
+    fontWeight: "400" as any,
+  },
+  disabledHint: {
+    fontSize: 12,
+    color: "#B45309",
+    marginTop: 10,
+    fontWeight: "400" as any,
+  },
 
   bubblesWrap: {
     flexDirection: "row",
@@ -898,11 +1042,31 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
 
-  bubbleTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  bubbleTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
 
-  bubbleName: { flex: 1, minWidth: 0, fontSize: 13, color: Theme.colors.text, fontWeight: "400" },
-  bubbleAmount: { fontSize: 14, color: Theme.colors.text, fontWeight: "700" },
-  bubbleDate: { marginTop: 6, fontSize: 12, color: Theme.colors.textMuted, fontWeight: "400" },
+  bubbleName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    color: Theme.colors.text,
+    fontWeight: "400",
+  },
+  bubbleAmount: {
+    fontSize: 14,
+    color: Theme.colors.text,
+    fontWeight: "700",
+  },
+  bubbleDate: {
+    marginTop: 6,
+    fontSize: 12,
+    color: Theme.colors.textMuted,
+    fontWeight: "400",
+  },
 
   seeMoreBubble: {
     borderWidth: 1,

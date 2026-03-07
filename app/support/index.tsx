@@ -1,5 +1,10 @@
 // app/support/index.tsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -8,6 +13,7 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import {
   collection,
@@ -37,7 +43,7 @@ interface SupportTicket {
   status: TicketStatus;
   priority: "low" | "medium" | "high";
   createdBy: string;
-  createdAt?: any; // Firestore Timestamp
+  createdAt?: any;
   lastMessageAt?: any;
 }
 
@@ -67,15 +73,18 @@ export default function SupportPage() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
 
-  // Create-ticket modal state
   const [creating, setCreating] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newDescription, setNewDescription] = useState("");
 
-  // Close ticket reason (admin)
   const [closeReason, setCloseReason] = useState("");
 
-  // 1) Load user profile and see if admin
+  // refs
+  const createSubjectRef = useRef<TextInput>(null);
+  const createDescriptionRef = useRef<TextInput>(null);
+  const closeReasonRef = useRef<TextInput>(null);
+  const messageInputRef = useRef<TextInput>(null);
+
   useEffect(() => {
     if (!user) return;
     const loadProfile = async () => {
@@ -96,65 +105,58 @@ export default function SupportPage() {
     loadProfile();
   }, [user]);
 
-  // 2) Subscribe to tickets (for user or admin)
- useEffect(() => {
-  if (!user || loadingProfile) return;
+  useEffect(() => {
+    if (!user || loadingProfile) return;
 
-  setTicketsLoading(true);
+    setTicketsLoading(true);
 
-  let qRef;
-  if (isAdmin) {
-    // Admin sees all tickets
-    qRef = collection(db, "supportTickets");
-  } else {
-    // Normal user sees only their tickets
-    qRef = query(
-      collection(db, "supportTickets"),
-      where("createdBy", "==", user.uid)
-    );
-  }
-
-  const unsub = onSnapshot(
-    qRef,
-    (snap) => {
-      const list: SupportTicket[] = [];
-      snap.forEach((docSnap) => {
-        list.push({ id: docSnap.id, ...(docSnap.data() as any) });
-      });
-
-      // Sort client-side: newest first
-      list.sort((a, b) => {
-        const ta = a.createdAt?.seconds ?? 0;
-        const tb = b.createdAt?.seconds ?? 0;
-        return tb - ta;
-      });
-
-      setTickets(list);
-      setTicketsLoading(false);
-
-      if (!selectedTicketId && list.length > 0) {
-        setSelectedTicketId(list[0].id);
-        setSelectedTicket(list[0]);
-      }
-    },
-    (err) => {
-      console.error("Tickets listener error", err);
-      setTicketsLoading(false);
+    let qRef;
+    if (isAdmin) {
+      qRef = collection(db, "supportTickets");
+    } else {
+      qRef = query(
+        collection(db, "supportTickets"),
+        where("createdBy", "==", user.uid)
+      );
     }
-  );
 
-  return () => unsub();
-}, [user, isAdmin, loadingProfile]);
+    const unsub = onSnapshot(
+      qRef,
+      (snap) => {
+        const list: SupportTicket[] = [];
+        snap.forEach((docSnap) => {
+          list.push({ id: docSnap.id, ...(docSnap.data() as any) });
+        });
 
+        list.sort((a, b) => {
+          const ta = a.createdAt?.seconds ?? 0;
+          const tb = b.createdAt?.seconds ?? 0;
+          return tb - ta;
+        });
 
-  // Keep selectedTicket in sync when tickets list changes
+        setTickets(list);
+        setTicketsLoading(false);
+
+        if (!selectedTicketId && list.length > 0) {
+          setSelectedTicketId(list[0].id);
+          setSelectedTicket(list[0]);
+        }
+      },
+      (err) => {
+        console.error("Tickets listener error", err);
+        setTicketsLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [user, isAdmin, loadingProfile, selectedTicketId]);
+
   useEffect(() => {
     if (!selectedTicketId) return;
     const found = tickets.find((t) => t.id === selectedTicketId) || null;
     setSelectedTicket(found);
   }, [tickets, selectedTicketId]);
 
-  // 3) Subscribe to messages for selected ticket
   useEffect(() => {
     if (!selectedTicketId) return;
 
@@ -183,7 +185,6 @@ export default function SupportPage() {
     return () => unsub();
   }, [selectedTicketId]);
 
-  // 4) Create ticket
   const handleCreateTicket = useCallback(async () => {
     if (!user) {
       alert("You need to be logged in to create a ticket.");
@@ -224,34 +225,33 @@ export default function SupportPage() {
     }
   }, [user, newSubject, newDescription, isAdmin]);
 
-  // 5) Send message
-const handleSendMessage = useCallback(async () => {
-  if (!selectedTicketId || !user || !newMessage.trim()) return;
+ const handleSendMessage = useCallback(
+  async (overrideText?: string) => {
+    const messageToSend = (overrideText ?? newMessage).trim();
 
-  const senderRole = isAdmin ? "admin" : "user";
+    if (!selectedTicketId || !user || !messageToSend) return;
 
-  await addDoc(
-    collection(db, "supportTickets", selectedTicketId, "messages"),
-    {
-      body: newMessage.trim(),        // 👈 use `body`, matches SupportMessage + UI
-      senderId: user.uid,
-      senderRole,
-      createdAt: serverTimestamp(),
-    }
-  );
+    const senderRole = isAdmin ? "admin" : "user";
 
-  // optional but nice: update "lastMessageAt" for sorting later
-  await updateDoc(doc(db, "supportTickets", selectedTicketId), {
-    lastMessageAt: serverTimestamp(),
-  });
+    await addDoc(
+      collection(db, "supportTickets", selectedTicketId, "messages"),
+      {
+        body: messageToSend,
+        senderId: user.uid,
+        senderRole,
+        createdAt: serverTimestamp(),
+      }
+    );
 
-  setNewMessage(""); // 👈 clear the input
-}, [selectedTicketId, user, newMessage, isAdmin]);
+    await updateDoc(doc(db, "supportTickets", selectedTicketId), {
+      lastMessageAt: serverTimestamp(),
+    });
 
+    setNewMessage("");
+  },
+  [selectedTicketId, user, newMessage, isAdmin]
+);
 
-
-
-  // 6) Close ticket (admin only)
   const handleCloseTicket = useCallback(async () => {
     if (!isAdmin || !selectedTicketId) return;
 
@@ -295,15 +295,11 @@ const handleSendMessage = useCallback(async () => {
 
   return (
     <Screen>
-
       <View style={styles.page}>
-        {/* Header row */}
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.pageTitle}>Support Management</Text>
-            <Text style={styles.pageSubtitle}>
-              Manage all support tickets
-            </Text>
+            <Text style={styles.pageSubtitle}>Manage all support tickets</Text>
           </View>
 
           <View style={styles.headerActions}>
@@ -311,21 +307,18 @@ const handleSendMessage = useCallback(async () => {
           </View>
         </View>
 
-        {/* Main two-column layout */}
         <View style={styles.columns}>
-          {/* Left: tickets list */}
           <View style={styles.leftColumn}>
             <Text style={styles.columnTitle}>Open Tickets</Text>
 
-           <View style={styles.headerActions}>
-  <Button
-    label="+ Create Ticket"
-    onPress={() => setCreating(true)}
-    style={styles.largeButton}
-    labelStyle={styles.largeButtonLabel}
-  />
-</View>
-
+            <View style={styles.headerActions}>
+              <Button
+                label="+ Create Ticket"
+                onPress={() => setCreating(true)}
+                style={styles.largeButton}
+                labelStyle={styles.largeButtonLabel}
+              />
+            </View>
 
             <ScrollView
               style={styles.ticketList}
@@ -368,7 +361,6 @@ const handleSendMessage = useCallback(async () => {
             </ScrollView>
           </View>
 
-          {/* Right: chat / details */}
           <View style={styles.rightColumn}>
             {!selectedTicket && (
               <View style={styles.emptyState}>
@@ -382,7 +374,6 @@ const handleSendMessage = useCallback(async () => {
 
             {selectedTicket && (
               <View style={styles.chatWrapper}>
-                {/* Ticket header */}
                 <View style={styles.ticketHeader}>
                   <View>
                     <Text style={styles.ticketTitle}>
@@ -408,7 +399,6 @@ const handleSendMessage = useCallback(async () => {
                   </View>
                 </View>
 
-                {/* Messages list */}
                 <View style={styles.messagesContainer}>
                   {messagesLoading ? (
                     <View style={styles.centerSmall}>
@@ -435,33 +425,50 @@ const handleSendMessage = useCallback(async () => {
                   )}
                 </View>
 
-                {/* Admin close reason */}
                 {isAdmin && selectedTicket.status === "open" && (
                   <View style={styles.closeReasonBox}>
                     <Text style={styles.closeReasonLabel}>
                       Close reason (optional)
                     </Text>
                     <TextInput
+                      ref={closeReasonRef}
                       style={styles.closeReasonInput}
                       value={closeReason}
                       onChangeText={setCloseReason}
                       placeholder="Add a short reason for closing this ticket..."
                       placeholderTextColor="#9CA3AF"
+                      returnKeyType="done"
+                      onSubmitEditing={handleCloseTicket}
                     />
                   </View>
                 )}
 
-                {/* Message composer */}
                 {selectedTicket.status === "open" ? (
                   <View style={styles.composer}>
-                    <TextInput
-                      style={styles.composerInput}
-                      value={newMessage}
-                      onChangeText={setNewMessage}
-                      placeholder="Type your message..."
-                      placeholderTextColor="#9CA3AF"
-                      multiline
-                    />
+               <TextInput
+  ref={messageInputRef}
+  style={styles.composerInput}
+  value={newMessage}
+  onChangeText={(text) => {
+    if (Platform.OS === "web" && text.endsWith("\n")) {
+      const cleaned = text.replace(/\n+$/, "").trim();
+
+      if (cleaned) {
+        handleSendMessage(cleaned);
+      } else {
+        setNewMessage("");
+      }
+
+      return;
+    }
+
+    setNewMessage(text);
+  }}
+  placeholder="Type your message..."
+  placeholderTextColor="#9CA3AF"
+  multiline
+  blurOnSubmit={false}
+/>
                     <Button label="Send" onPress={handleSendMessage} />
                   </View>
                 ) : (
@@ -477,7 +484,6 @@ const handleSendMessage = useCallback(async () => {
           </View>
         </View>
 
-        {/* Create-ticket panel */}
         {creating && (
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
@@ -485,39 +491,46 @@ const handleSendMessage = useCallback(async () => {
 
               <Text style={styles.modalLabel}>Subject</Text>
               <TextInput
+                ref={createSubjectRef}
                 style={styles.input}
                 value={newSubject}
                 onChangeText={setNewSubject}
                 placeholder="Short summary of your issue"
                 placeholderTextColor="#9CA3AF"
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => createDescriptionRef.current?.focus()}
               />
 
               <Text style={styles.modalLabel}>Description</Text>
               <TextInput
+                ref={createDescriptionRef}
                 style={[styles.input, styles.inputMultiline]}
                 value={newDescription}
                 onChangeText={setNewDescription}
                 placeholder="Describe your problem in more detail..."
                 placeholderTextColor="#9CA3AF"
                 multiline
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={handleCreateTicket}
               />
 
-            <View style={styles.modalActions}>
-  <Button
-    label="Cancel"
-    variant="secondary"
-    onPress={() => setCreating(false)}
-    style={styles.modalButton}
-    labelStyle={styles.modalButtonTextSecondary}
-  />
-  <Button
-    label="Create Ticket"
-    onPress={handleCreateTicket}
-    style={styles.modalButton}
-    labelStyle={styles.modalButtonTextPrimary}
-  />
-</View>
-
+              <View style={styles.modalActions}>
+                <Button
+                  label="Cancel"
+                  variant="secondary"
+                  onPress={() => setCreating(false)}
+                  style={styles.modalButton}
+                  labelStyle={styles.modalButtonTextSecondary}
+                />
+                <Button
+                  label="Create Ticket"
+                  onPress={handleCreateTicket}
+                  style={styles.modalButton}
+                  labelStyle={styles.modalButtonTextPrimary}
+                />
+              </View>
             </View>
           </View>
         )}
@@ -525,8 +538,6 @@ const handleSendMessage = useCallback(async () => {
     </Screen>
   );
 }
-
-/* ---------- Small components ---------- */
 
 function TicketListItem({
   ticket,
@@ -624,7 +635,9 @@ function MessageBubble({
     <View
       style={[
         styles.messageRow,
-        isOwn ? { justifyContent: "flex-end" } : { justifyContent: "flex-start" },
+        isOwn
+          ? { justifyContent: "flex-end" }
+          : { justifyContent: "flex-start" },
       ]}
     >
       <View
@@ -665,8 +678,6 @@ function MessageBubble({
   );
 }
 
-/* ---------- Styles ---------- */
-
 const styles = StyleSheet.create({
   page: {
     flex: 1,
@@ -687,7 +698,7 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSubtle,
     marginTop: 4,
   },
-    largeButton: {
+  largeButton: {
     minWidth: 190,
     paddingVertical: 12,
   },
@@ -937,7 +948,7 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: "top",
   },
-   modalActions: {
+  modalActions: {
     marginTop: Theme.spacing.lg,
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -954,5 +965,4 @@ const styles = StyleSheet.create({
   modalButtonTextSecondary: {
     fontWeight: "600",
   },
-
 });

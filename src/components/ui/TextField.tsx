@@ -1,22 +1,26 @@
-import React from "react";
+import React, { forwardRef } from "react";
 import { View, Text, TextInput, StyleSheet } from "react-native";
 import { Theme } from "../../styles/Theme";
 
-export default function TextField({
-  label,
-  ...props
-}: { label?: string } & React.ComponentProps<typeof TextInput>) {
+type Props = { label?: string } & React.ComponentProps<typeof TextInput>;
+
+const TextField = forwardRef<TextInput, Props>(({ label, ...props }, ref) => {
   return (
     <View style={styles.wrapper}>
       {label && <Text style={styles.label}>{label}</Text>}
       <TextInput
+        ref={ref}
         {...props}
-        placeholderTextColor={props.placeholderTextColor ?? Theme.colors.textSubtle}
+        placeholderTextColor={
+          props.placeholderTextColor ?? Theme.colors.textSubtle
+        }
         style={[styles.input, props.style]}
       />
     </View>
   );
-}
+});
+
+export default TextField;
 
 const styles = StyleSheet.create({
   wrapper: { marginBottom: Theme.spacing.md },

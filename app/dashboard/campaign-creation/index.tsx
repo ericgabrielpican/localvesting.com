@@ -43,10 +43,12 @@ interface Business {
 
 const CATEGORIES = [
   "Restaurant",
-  "Café / Coffee shop",
-  "Bar / Pub",
+  "Bar",
   "Retail",
-  "Services",
+  "Manufacturing",
+  "Art gallery",
+  "Cultural events",
+  "Agriculture",
   "Other",
 ];
 

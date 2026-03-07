@@ -25,7 +25,10 @@ import Screen from "../../src/components/ui/Screen";
 import Card from "../../src/components/ui/Card";
 import { Theme } from "../../src/styles/Theme";
 
-import { isEmailVerified, resendEmailVerification } from "../../src/firebase/auth";
+import {
+  isEmailVerified,
+  resendEmailVerification,
+} from "../../src/firebase/auth";
 
 type Business = {
   id: string;
@@ -44,7 +47,6 @@ export default function MyBusinessesScreen() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Email verification status UI state (auto-updates)
   const [emailVerified, setEmailVerified] = useState<boolean>(false);
   const [checkingEmail, setCheckingEmail] = useState<boolean>(true);
   const [resending, setResending] = useState<boolean>(false);
@@ -91,7 +93,6 @@ export default function MyBusinessesScreen() {
     return unsub;
   }, [user?.uid]);
 
-  // Initial check when screen loads / user changes
   useEffect(() => {
     let alive = true;
 
@@ -124,7 +125,6 @@ export default function MyBusinessesScreen() {
     };
   }, [user?.uid]);
 
-  // Auto-refresh every 10s until verified
   useEffect(() => {
     if (!user) return;
     if (emailVerified) return;
@@ -135,7 +135,7 @@ export default function MyBusinessesScreen() {
         setEmailVerified(v);
         if (v) setEmailInfo("Email verified ✅");
       } catch {
-        // silent: avoid spamming UI with polling errors
+        // silent
       }
     }, 10000);
 
@@ -161,9 +161,13 @@ export default function MyBusinessesScreen() {
     router.push("/dashboard/addBusiness");
   };
 
+  const goToBusinessProfile = (businessId: string) => {
+    router.push(`/mybusinesses/${businessId}` as any);
+  };
+
   const renderStatusChip = (b: Business) => {
     let label = "Pending verification";
-    let bg = "#FEF3C7"; // amber100
+    let bg = "#FEF3C7";
     let color = "#92400E";
 
     if (b.verified === true) {
@@ -201,14 +205,12 @@ export default function MyBusinessesScreen() {
 
   return (
     <Screen>
-
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.pageTitle}>My Businesses</Text>
         <Text style={styles.subtitle}>
           Manage your business profiles and verification status
         </Text>
 
-        {/* EMAIL VERIFICATION STATUS (AUTO) */}
         {!!user && (
           <View style={styles.verifyBox}>
             <View style={styles.verifyRow}>
@@ -247,12 +249,12 @@ export default function MyBusinessesScreen() {
           </View>
         )}
 
-        {/* EMPTY STATE — WITH YOUR BIG BUTTON */}
         {!hasBusinesses && (
           <View style={styles.emptyBox}>
             <Text style={styles.emptyTitle}>No businesses yet</Text>
             <Text style={styles.emptyText}>
-              Add your first business to request verification and start raising funds.
+              Add your first business to request verification and start raising
+              funds.
             </Text>
 
             <Pressable style={styles.bigAddButton} onPress={goToAddBusiness}>
@@ -261,32 +263,42 @@ export default function MyBusinessesScreen() {
           </View>
         )}
 
-        {/* BUSINESS LIST */}
         {hasBusinesses && (
           <>
             <View style={styles.listHeader}>
               <Text style={styles.sectionTitle}>Your Businesses</Text>
 
-              {/* small top-right button */}
               <Pressable style={styles.smallAddButton} onPress={goToAddBusiness}>
                 <Text style={styles.smallAddButtonLabel}>Add Business</Text>
               </Pressable>
             </View>
 
             {businesses.map((b) => (
-              <Card key={b.id} style={styles.businessCard}>
-                <View style={styles.businessHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.businessName}>{b.name}</Text>
-                    <Text style={styles.businessMeta}>
-                      {b.category || "Uncategorized"}
-                    </Text>
-                    <Text style={styles.businessAddress}>{b.address}</Text>
-                  </View>
+              <Pressable
+                key={b.id}
+                onPress={() => goToBusinessProfile(b.id)}
+                style={({ pressed }) => [
+                  styles.businessPressable,
+                  pressed && styles.businessPressablePressed,
+                ]}
+              >
+                <Card style={styles.businessCard}>
+                  <View style={styles.businessHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.businessName}>{b.name}</Text>
+                      <Text style={styles.businessMeta}>
+                        {b.category || "Uncategorized"}
+                      </Text>
+                      <Text style={styles.businessAddress}>{b.address}</Text>
+                    </View>
 
-                  {renderStatusChip(b)}
-                </View>
-              </Card>
+                    <View style={styles.businessRight}>
+                      {renderStatusChip(b)}
+                      <Text style={styles.viewProfileText}>View profile →</Text>
+                    </View>
+                  </View>
+                </Card>
+              </Pressable>
             ))}
           </>
         )}
@@ -317,7 +329,6 @@ const styles = StyleSheet.create({
     marginBottom: Theme.spacing.lg,
   },
 
-  /* EMAIL VERIFICATION BOX */
   verifyBox: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -360,7 +371,6 @@ const styles = StyleSheet.create({
     color: "#B91C1C",
   },
 
-  /* EMPTY BOX WITH BIG BUTTON */
   emptyBox: {
     backgroundColor: "#fff",
     padding: 28,
@@ -393,7 +403,6 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  /* LIST HEADER */
   listHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -404,7 +413,6 @@ const styles = StyleSheet.create({
     ...Theme.typography.subtitle,
   },
 
-  /* SMALL TOP-RIGHT BUTTON */
   smallAddButton: {
     paddingVertical: 10,
     paddingHorizontal: 18,
@@ -416,13 +424,21 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  /* BUSINESS CARDS */
-  businessCard: {
+  businessPressable: {
     marginBottom: Theme.spacing.md,
+    borderRadius: 16,
+  },
+  businessPressablePressed: {
+    opacity: 0.92,
+  },
+
+  businessCard: {
+    marginBottom: 0,
   },
   businessHeader: {
     flexDirection: "row",
     gap: Theme.spacing.md,
+    alignItems: "flex-start",
   },
   businessName: {
     ...Theme.typography.title,
@@ -436,8 +452,16 @@ const styles = StyleSheet.create({
     ...Theme.typography.body,
     color: Theme.colors.textMuted,
   },
+  businessRight: {
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  viewProfileText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Theme.colors.primary,
+  },
 
-  /* STATUS CHIP */
   statusChip: {
     paddingVertical: 6,
     paddingHorizontal: 12,

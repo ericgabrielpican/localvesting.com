@@ -23,12 +23,12 @@ import { useAuth } from "../../src/context/AuthContext";
 
 const CATEGORIES = [
   "Restaurant",
-  "Café / Coffee shop",
-  "Bar / Pub",
+  "Bar",
   "Retail",
-  "Services",
-  "Healthcare",
   "Manufacturing",
+  "Art gallery",
+  "Cultural events",
+  "Agriculture",
   "Other",
 ];
 
