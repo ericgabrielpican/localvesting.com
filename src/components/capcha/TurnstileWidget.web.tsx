@@ -19,7 +19,7 @@ type Props = {
 };
 
 const TURNSTILE_SRC =
-  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 function loadTurnstileScript(): Promise<void> {
   // If already available, done
@@ -27,7 +27,7 @@ function loadTurnstileScript(): Promise<void> {
 
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector(
-      `script[src="${TURNSTILE_SRC}"]`
+        `script[src="${TURNSTILE_SRC}"]`
     ) as HTMLScriptElement | null;
 
     if (existing) {
@@ -53,12 +53,12 @@ function loadTurnstileScript(): Promise<void> {
 }
 
 export default function TurnstileWidget({
-  siteKey,
-  onToken,
-  onExpired,
-  onError,
-  theme = "light",
-}: Props) {
+                                          siteKey,
+                                          onToken,
+                                          onExpired,
+                                          onError,
+                                          theme = "light",
+                                        }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
@@ -134,25 +134,25 @@ export default function TurnstileWidget({
   }, [siteKey, theme]);
 
   return (
-    <div
-      style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        padding: 10,
-        background: "#fff",
-      }}
-    >
-      <div ref={containerRef} />
       <div
-        style={{
-          fontSize: 12,
-          color: "#6b7280",
-          marginTop: 6,
-          textAlign: "center",
-        }}
+          style={{
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            padding: 10,
+            background: "#fff",
+          }}
       >
-        Security check
+        <div ref={containerRef} />
+        <div
+            style={{
+              fontSize: 12,
+              color: "#6b7280",
+              marginTop: 6,
+              textAlign: "center",
+            }}
+        >
+          Security check
+        </div>
       </div>
-    </div>
   );
 }

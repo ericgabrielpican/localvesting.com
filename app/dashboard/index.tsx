@@ -54,7 +54,7 @@ export default function Dashboard() {
         <View style={styles.actions}>
           <Button
             label="Create Campaign"
-            onPress={() => router.push("/dashboard/createCampaign" as any)}
+            onPress={() => router.push("/dashboard/campaign-creation" as any)}
           />
           <Button
             label="Add Business"

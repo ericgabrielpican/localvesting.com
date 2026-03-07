@@ -322,7 +322,7 @@ const BrowseScreen: React.FC = () => {
             <View style={[styles.campaignCardWrapper, { width: `${100 / columns}%` }]}>
               <Pressable
                 style={styles.addCampaignCard}
-                onPress={() => router.push("/dashboard/createCampaign" as any)}
+                onPress={() => router.push("/dashboard/campaign-creation" as any)}
               >
                 <View style={styles.addCampaignIconCircle}>
                   <Text style={styles.addCampaignIcon}>+</Text>
