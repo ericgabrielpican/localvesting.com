@@ -34,7 +34,7 @@ const VERIFY_FN_NAME = "verifyTurnstile";
 type Mode = "login" | "signup";
 
 // ------------------------------------------------------------------
-// ✅ Expo-safe env reader
+// Expo-safe env reader
 // Priority:
 // 1) app.config.js -> expo.extra
 // 2) EXPO_PUBLIC_* (dev / legacy fallback)
@@ -73,14 +73,15 @@ export default function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  // 🔐 Turnstile token from widget (web)
+  // Turnstile token from widget (web)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
-  // ✅ Guards to stop verify loops
+  // Guards to stop verify loops
   const verifyingRef = useRef(false);
   const lastVerifiedTokenRef = useRef<string | null>(null);
+  const passwordInputRef = useRef<TextInput>(null);
 
-  // ✅ Legal acceptance (required ONLY for signup)
+  // Legal acceptance (required ONLY for signup)
   const [readPrivacy, setReadPrivacy] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
@@ -101,7 +102,9 @@ export default function LoginScreen() {
     }
   }, [mode]);
 
-  const openLegalPage = (path: "/privacypolicy" | "/cookiepolicy" | "/terms") => {
+  const openLegalPage = (
+    path: "/privacypolicy" | "/cookiepolicy" | "/terms"
+  ) => {
     try {
       router.push(path as any);
     } catch {
@@ -133,14 +136,17 @@ export default function LoginScreen() {
     }
 
     if (!turnstileToken) {
-      Alert.alert("Verification required", "Please complete the security check.");
+      Alert.alert(
+        "Verification required",
+        "Please complete the security check."
+      );
       throw new Error("Turnstile token missing");
     }
 
-    // ✅ Prevent repeated verification for the same token
+    // Prevent repeated verification for the same token
     if (lastVerifiedTokenRef.current === turnstileToken) return;
 
-    // ✅ Prevent concurrent verify calls
+    // Prevent concurrent verify calls
     if (verifyingRef.current) return;
 
     verifyingRef.current = true;
@@ -149,13 +155,11 @@ export default function LoginScreen() {
       const res: any = await verify({ token: turnstileToken });
 
       if (res?.data?.success === false) {
-        // Server says invalid => clear so user can retry
         lastVerifiedTokenRef.current = null;
         setTurnstileToken(null);
         throw new Error(res?.data?.message ?? "Turnstile verification failed");
       }
 
-      // ✅ Mark token as verified so we don't verify again
       lastVerifiedTokenRef.current = turnstileToken;
     } finally {
       verifyingRef.current = false;
@@ -205,6 +209,8 @@ export default function LoginScreen() {
   };
 
   const handleSubmit = async () => {
+    if (submitting || googleLoading) return;
+
     if (!requireLegal()) return;
 
     if (!email.trim() || !password) {
@@ -219,25 +225,28 @@ export default function LoginScreen() {
 
       let user;
       if (mode === "login") {
-        user = await loginWithEmailPassword(email, password);
+        user = await loginWithEmailPassword(email.trim(), password);
       } else {
-        user = await registerWithEmailPassword(email, password);
+        user = await registerWithEmailPassword(email.trim(), password);
         await setDoc(
           doc(db, "users", user.uid),
-          { email, role: null, createdAt: serverTimestamp() },
+          {
+            email: email.trim(),
+            role: null,
+            createdAt: serverTimestamp(),
+          },
           { merge: true }
         );
-     
       }
-   await ensureUserWallet(user.uid);
-      await handlePostLogin(user);
 
-      // ✅ DO NOT clear token here (can cause Turnstile to re-run)
-      // If you want to force a new challenge only after a while,
-      // do it later or let Turnstile rotate naturally.
+      await ensureUserWallet(user.uid);
+      await handlePostLogin(user);
     } catch (e: any) {
       console.error(e);
-      Alert.alert("Authentication error", e?.message ?? "Could not authenticate.");
+      Alert.alert(
+        "Authentication error",
+        e?.message ?? "Could not authenticate."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -249,18 +258,22 @@ export default function LoginScreen() {
       return;
     }
     try {
-      await resetPassword(email);
+      await resetPassword(email.trim());
       Alert.alert(
         "Password reset",
         "If an account exists for that email, you'll receive a reset link."
       );
     } catch (e: any) {
       console.error(e);
-      Alert.alert("Error", e?.message ?? "Could not send password reset email.");
+      Alert.alert(
+        "Error",
+        e?.message ?? "Could not send password reset email."
+      );
     }
   };
 
   const handleGoogle = async () => {
+    if (googleLoading || submitting) return;
     if (!requireLegal()) return;
 
     try {
@@ -271,8 +284,6 @@ export default function LoginScreen() {
       if (Platform.OS === "web") {
         const user = await loginWithGoogleWeb();
         await handlePostLogin(user);
-
-        // ✅ DO NOT clear token here either
       } else {
         Alert.alert(
           "Not available yet",
@@ -281,7 +292,10 @@ export default function LoginScreen() {
       }
     } catch (e: any) {
       console.error(e);
-      Alert.alert("Google sign-in error", e?.message ?? "Could not sign in with Google.");
+      Alert.alert(
+        "Google sign-in error",
+        e?.message ?? "Could not sign in with Google."
+      );
     } finally {
       setGoogleLoading(false);
     }
@@ -298,7 +312,12 @@ export default function LoginScreen() {
   }) => (
     <Pressable
       onPress={onToggle}
-      style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 6 }}
+      style={{
+        flexDirection: "row",
+        alignItems: "flex-start",
+        gap: 10,
+        paddingVertical: 6,
+      }}
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
     >
@@ -316,7 +335,14 @@ export default function LoginScreen() {
         }}
       >
         {checked ? (
-          <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: "#ffffff" }} />
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 2,
+              backgroundColor: "#ffffff",
+            }}
+          />
         ) : null}
       </View>
       <View style={{ flex: 1 }}>{children}</View>
@@ -361,22 +387,47 @@ export default function LoginScreen() {
             padding: 18,
           }}
         >
-          <Text style={{ fontSize: 26, fontWeight: "700", color: "#111827", marginBottom: 6, textAlign: "center" }}>
+          <Text
+            style={{
+              fontSize: 26,
+              fontWeight: "700",
+              color: "#111827",
+              marginBottom: 6,
+              textAlign: "center",
+            }}
+          >
             {mode === "login" ? "Welcome back" : "Create account"}
           </Text>
 
-          <Text style={{ fontSize: 13, color: "#6b7280", marginBottom: 18, textAlign: "center", lineHeight: 18 }}>
-            {mode === "login" ? "Log in to continue." : "Create an account to continue."}
+          <Text
+            style={{
+              fontSize: 13,
+              color: "#6b7280",
+              marginBottom: 18,
+              textAlign: "center",
+              lineHeight: 18,
+            }}
+          >
+            {mode === "login"
+              ? "Log in to continue."
+              : "Create an account to continue."}
           </Text>
 
-          <Text style={{ marginBottom: 4, color: "#374151", fontSize: 14 }}>Email</Text>
+          <Text style={{ marginBottom: 4, color: "#374151", fontSize: 14 }}>
+            Email
+          </Text>
           <TextInput
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
+            autoCorrect={false}
             keyboardType="email-address"
             placeholder="you@example.com"
             placeholderTextColor="#9ca3af"
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
+            editable={!submitting && !googleLoading}
             style={{
               borderWidth: 1,
               borderColor: "#d1d5db",
@@ -387,13 +438,19 @@ export default function LoginScreen() {
             }}
           />
 
-          <Text style={{ marginBottom: 4, color: "#374151", fontSize: 14 }}>Password</Text>
+          <Text style={{ marginBottom: 4, color: "#374151", fontSize: 14 }}>
+            Password
+          </Text>
           <TextInput
+            ref={passwordInputRef}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
             placeholder="••••••••"
             placeholderTextColor="#9ca3af"
+            returnKeyType={mode === "login" ? "go" : "done"}
+            onSubmitEditing={handleSubmit}
+            editable={!submitting && !googleLoading}
             style={{
               borderWidth: 1,
               borderColor: "#d1d5db",
@@ -406,7 +463,9 @@ export default function LoginScreen() {
 
           {mode === "login" && (
             <TouchableOpacity onPress={handleResetPassword}>
-              <Text style={{ fontSize: 13, color: "#2563eb", marginBottom: 14 }}>
+              <Text
+                style={{ fontSize: 13, color: "#2563eb", marginBottom: 14 }}
+              >
                 Forgot password?
               </Text>
             </TouchableOpacity>
@@ -423,24 +482,48 @@ export default function LoginScreen() {
                 marginBottom: 14,
               }}
             >
-              <CheckboxRow checked={readPrivacy} onToggle={() => setReadPrivacy((p) => !p)}>
+              <CheckboxRow
+                checked={readPrivacy}
+                onToggle={() => setReadPrivacy((p) => !p)}
+              >
                 <Text style={{ color: "#111827", fontSize: 13, lineHeight: 18 }}>
                   I have read and understand the{" "}
-                  <Text style={{ color: "#2563eb", textDecorationLine: "underline" }} onPress={() => openLegalPage("/privacypolicy")}>
+                  <Text
+                    style={{
+                      color: "#2563eb",
+                      textDecorationLine: "underline",
+                    }}
+                    onPress={() => openLegalPage("/privacypolicy")}
+                  >
                     Privacy Policy
                   </Text>{" "}
                   and{" "}
-                  <Text style={{ color: "#2563eb", textDecorationLine: "underline" }} onPress={() => openLegalPage("/cookiepolicy")}>
+                  <Text
+                    style={{
+                      color: "#2563eb",
+                      textDecorationLine: "underline",
+                    }}
+                    onPress={() => openLegalPage("/cookiepolicy")}
+                  >
                     Cookie Policy
                   </Text>
                   .
                 </Text>
               </CheckboxRow>
 
-              <CheckboxRow checked={acceptedTerms} onToggle={() => setAcceptedTerms((p) => !p)}>
+              <CheckboxRow
+                checked={acceptedTerms}
+                onToggle={() => setAcceptedTerms((p) => !p)}
+              >
                 <Text style={{ color: "#111827", fontSize: 13, lineHeight: 18 }}>
                   I agree to the{" "}
-                  <Text style={{ color: "#2563eb", textDecorationLine: "underline" }} onPress={() => openLegalPage("/terms")}>
+                  <Text
+                    style={{
+                      color: "#2563eb",
+                      textDecorationLine: "underline",
+                    }}
+                    onPress={() => openLegalPage("/terms")}
+                  >
                     Terms & Conditions
                   </Text>
                   .
@@ -455,7 +538,6 @@ export default function LoginScreen() {
             </View>
           )}
 
-          {/* ✅ Turnstile on WEB only */}
           {Platform.OS === "web" && (
             <View style={{ marginBottom: 14 }}>
               {TURNSTILE_SITE_KEY ? (
@@ -469,7 +551,10 @@ export default function LoginScreen() {
                   onError={() => {
                     lastVerifiedTokenRef.current = null;
                     setTurnstileToken(null);
-                    Alert.alert("Security check error", "Could not load Turnstile. Please refresh.");
+                    Alert.alert(
+                      "Security check error",
+                      "Could not load Turnstile. Please refresh."
+                    );
                   }}
                 />
               ) : (
@@ -482,46 +567,94 @@ export default function LoginScreen() {
                     padding: 10,
                   }}
                 >
-                  <Text style={{ fontSize: 12, color: "#991b1b", textAlign: "center" }}>
-                    Turnstile site key missing. Set EXPO_PUBLIC_TURNSTILE_SITE_KEY and map it into expo.extra.
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#991b1b",
+                      textAlign: "center",
+                    }}
+                  >
+                    Turnstile site key missing. Set
+                    EXPO_PUBLIC_TURNSTILE_SITE_KEY and map it into expo.extra.
                   </Text>
                 </View>
               )}
 
-              <Text style={{ fontSize: 12, color: "#6b7280", marginTop: 6, textAlign: "center" }}>
-                {turnstileToken ? "✅ Security check completed" : "Complete the security check above"}
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: "#6b7280",
+                  marginTop: 6,
+                  textAlign: "center",
+                }}
+              >
+                {turnstileToken
+                  ? "✅ Security check completed"
+                  : "Complete the security check above"}
               </Text>
             </View>
           )}
 
           <TouchableOpacity
             onPress={handleSubmit}
-            disabled={submitting || signupDisabled}
-            style={[primaryBtnStyle, { marginBottom: 12, opacity: submitting || signupDisabled ? 0.6 : 1 }]}
+            disabled={submitting || googleLoading || signupDisabled}
+            style={[
+              primaryBtnStyle,
+              {
+                marginBottom: 12,
+                opacity:
+                  submitting || googleLoading || signupDisabled ? 0.6 : 1,
+              },
+            ]}
           >
             {submitting ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={primaryBtnTextStyle}>{mode === "login" ? "Log in" : "Sign up"}</Text>
+              <Text style={primaryBtnTextStyle}>
+                {mode === "login" ? "Log in" : "Sign up"}
+              </Text>
             )}
           </TouchableOpacity>
 
-          <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 10 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: "#e5e7eb" }} />
-            <Text style={{ marginHorizontal: 8, fontSize: 12, color: "#9ca3af" }}>OR</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: "#e5e7eb" }} />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginVertical: 10,
+            }}
+          >
+            <View
+              style={{ flex: 1, height: 1, backgroundColor: "#e5e7eb" }}
+            />
+            <Text
+              style={{ marginHorizontal: 8, fontSize: 12, color: "#9ca3af" }}
+            >
+              OR
+            </Text>
+            <View
+              style={{ flex: 1, height: 1, backgroundColor: "#e5e7eb" }}
+            />
           </View>
 
           <TouchableOpacity
             onPress={handleGoogle}
-            disabled={googleLoading || signupDisabled}
-            style={[primaryBtnStyle, { marginBottom: 14, opacity: googleLoading || signupDisabled ? 0.6 : 1 }]}
+            disabled={googleLoading || submitting || signupDisabled}
+            style={[
+              primaryBtnStyle,
+              {
+                marginBottom: 14,
+                opacity:
+                  googleLoading || submitting || signupDisabled ? 0.6 : 1,
+              },
+            ]}
           >
             {googleLoading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
               <Text style={primaryBtnTextStyle}>
-                {mode === "login" ? "Continue with Google" : "Sign up with Google"}
+                {mode === "login"
+                  ? "Continue with Google"
+                  : "Sign up with Google"}
               </Text>
             )}
           </TouchableOpacity>
@@ -531,20 +664,28 @@ export default function LoginScreen() {
               const next = mode === "login" ? "signup" : "login";
               setMode(next);
               router.replace(`/login?mode=${next}` as any);
-
-              // Optional: if switching modes, allow a fresh verify for next action
               lastVerifiedTokenRef.current = null;
             }}
             style={{ marginTop: 10 }}
           >
-            <Text style={{ fontSize: 13, textAlign: "center", color: "#4b5563" }}>
+            <Text
+              style={{ fontSize: 13, textAlign: "center", color: "#4b5563" }}
+            >
               {mode === "login" ? (
                 <>
-                  No account? <Text style={{ color: "#2563eb", fontWeight: "600" }}>Sign up</Text>.
+                  No account?{" "}
+                  <Text style={{ color: "#2563eb", fontWeight: "600" }}>
+                    Sign up
+                  </Text>
+                  .
                 </>
               ) : (
                 <>
-                  Already have an account? <Text style={{ color: "#2563eb", fontWeight: "600" }}>Log in</Text>.
+                  Already have an account?{" "}
+                  <Text style={{ color: "#2563eb", fontWeight: "600" }}>
+                    Log in
+                  </Text>
+                  .
                 </>
               )}
             </Text>
