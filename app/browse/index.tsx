@@ -50,6 +50,7 @@ const CATEGORIES = [
   "Art gallery",
   "Cultural events",
   "Agriculture",
+  "Coffee shop",
 ];
 
 const DEFAULT_IMAGE_URI =

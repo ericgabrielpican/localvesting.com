@@ -49,6 +49,7 @@ const CATEGORIES = [
   "Art gallery",
   "Cultural events",
   "Agriculture",
+  "Coffee shop",
   "Other",
 ];
 
