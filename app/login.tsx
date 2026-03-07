@@ -29,6 +29,8 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firest
 import { httpsCallable } from "firebase/functions";
 
 import TurnstileWidget from "../src/components/capcha/TurnstileWidget.web";
+import {AuthError} from "expo-auth-session";
+import {isAuthErr} from "../src/firebase/auth-error";
 
 const VERIFY_FN_NAME = "verifyTurnstile";
 type Mode = "login" | "signup";
@@ -166,51 +168,47 @@ export default function LoginScreen() {
     }
   };
 
- const handlePostLogin = async (user: any) => {
-  const ref = doc(db, "users", user.uid);
-  const snap = await getDoc(ref);
+  const handlePostLogin = async (user: any) => {
+    const ref = doc(db, "users", user.uid);
+    const snap = await getDoc(ref);
 
-  if (!snap.exists()) {
-    await setDoc(ref, {
-      email: user.email ?? null,
-      role: null,
-      createdAt: serverTimestamp(),
-      givenRole: false,
-    });
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        email: user.email ?? null,
+        role: null,
+        createdAt: serverTimestamp(),
+      });
+      router.replace("/onboarding/chooseRole" as any);
+      return;
+    }
+
+    const data = snap.data() as any;
+    const role = data?.role ?? null;
+
+    if (!role) {
+      router.replace("/onboarding/chooseRole" as any);
+      return;
+    }
+
+    if (role === "admin") {
+      router.replace("/admin" as any);
+      return;
+    }
+
+    if (role === "business") {
+      if (data.businessSetupComplete) router.replace("/dashboard" as any);
+      else router.replace("/onboarding/businessSetup" as any);
+      return;
+    }
+
+    if (role === "investor") {
+      if (data.investorSetupComplete) router.replace("/browse" as any);
+      else router.replace("/onboarding/investorSetup" as any);
+      return;
+    }
+
     router.replace("/onboarding/chooseRole" as any);
-    return;
-  }
-
-  const data = snap.data() as any;
-  const role = data?.role ?? null;
-
-  if (!role) {
-    await updateDoc(ref, { givenRole: false });
-    router.replace("/onboarding/chooseRole" as any);
-    return;
-  }
-
-  await updateDoc(ref, { givenRole: true });
-
-  if (role === "admin") {
-    router.replace("/admin" as any);
-    return;
-  }
-
-  if (role === "business") {
-    if (data.businessSetupComplete) router.replace("/mybusinesses" as any);
-    else router.replace("/onboarding/businessSetup" as any);
-    return;
-  }
-
-  if (role === "investor") {
-    if (data.investorSetupComplete) router.replace("/browse" as any);
-    else router.replace("/onboarding/investorSetup" as any);
-    return;
-  }
-
-  router.replace("/browse" as any);
-};
+  };
 
   const handleSubmit = async () => {
     if (submitting || googleLoading) return;
@@ -238,7 +236,6 @@ export default function LoginScreen() {
             email: email.trim(),
             role: null,
             createdAt: serverTimestamp(),
-            givenRole: false,
           },
           { merge: true }
         );

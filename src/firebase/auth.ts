@@ -16,6 +16,7 @@ import {
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { auth } from "./config";
+import {AuthError} from "./auth-error"
 
 /**
  * Robust base URL resolver:
@@ -47,16 +48,16 @@ function getAppBaseUrl(): string {
  */
 function raiseAuthError(where: string, e: any): never {
   const code = e?.code || e?.message || String(e);
-  console.error(`[AUTH] ${where}:`, e);
+  // console.error(`[AUTH] ${where}:`, e);
 
-  // Show a dev-visible message on web
-  if (typeof window !== "undefined") {
-    // eslint-disable-next-line no-alert
-    alert(`[AUTH] ${where}: ${code}`);
-  }
+  // // Show a dev-visible message on web
+  // if (typeof window !== "undefined") {
+  //   // eslint-disable-next-line no-alert
+  //   alert(`[AUTH] ${where}: ${code}`);
+  // }
 
   // Re-throw so callers can handle it too
-  throw e;
+  throw new AuthError(where, e);
 }
 
 /**
