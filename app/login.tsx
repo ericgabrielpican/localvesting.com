@@ -20,7 +20,7 @@ import {
   loginWithEmailPassword,
   registerWithEmailPassword,
   resetPassword,
-  loginWithGoogleWeb,
+  loginWithGoogleWeb, checkVerifiedStatus,
 } from "../src/firebase/auth";
 import { ensureUserWallet } from "../src/firebase/wallet";
 
@@ -231,24 +231,29 @@ export default function LoginScreen() {
       } else {
         user = await registerWithEmailPassword(email.trim(), password);
         await setDoc(
-          doc(db, "users", user.uid),
-          {
-            email: email.trim(),
-            role: null,
-            createdAt: serverTimestamp(),
-          },
-          { merge: true }
+            doc(db, "users", user.uid),
+            {
+              email: email.trim(),
+              role: null,
+              createdAt: serverTimestamp(),
+            },
+            {merge: true}
         );
       }
 
       await ensureUserWallet(user.uid);
       await handlePostLogin(user);
     } catch (e: any) {
-      console.error(e);
-      Alert.alert(
-        "Authentication error",
-        e?.message ?? "Could not authenticate."
-      );
+      console.log(typeof e);
+      if( isAuthErr(e)) {
+        console.warn("this is not valid");
+      }else{
+        console.error("ASDNJSNDNja");
+        Alert.alert(
+            "Authentication error",
+            e?.message ?? "Could not authenticate."
+        );
+      }
     } finally {
       setSubmitting(false);
     }

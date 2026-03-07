@@ -2,15 +2,18 @@ export class AuthError extends Error {
     code?: string;
     where?: string;
     original?: unknown;
+    message: string;
 
     constructor(where: string, e: any) {
-        const code = e?.code || e?.message || String(e);
+        const code = e?.code  || String(e);
+        alert(code)
 
         super(`[AUTH] ${where}: ${code}`);
 
         this.name = "AuthError";
         this.code = e?.code;
         this.where = where;
+        this.message = e?.message;
         this.original = e;
 
         Object.setPrototypeOf(this, AuthError.prototype);

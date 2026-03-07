@@ -84,18 +84,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // If missing doc (Google login before profile creation, etc.), create it
        if (!snap.exists()) {
   try {
-    await setDoc(
-      ref,
-      {
-        email: user.email ?? null,
-        role: null,
-        createdAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    // ✅ Safety: ensure wallet exists too
-    await ensureUserWallet(user.uid);
+    // await setDoc(
+    //   ref,
+    //   {
+    //     email: user.email ?? null,
+    //     role: null,
+    //     createdAt: serverTimestamp(),
+    //   },
+    //   { merge: true }
+    // );
+    //
+    // // ✅ Safety: ensure wallet exists too
+    // await ensureUserWallet(user.uid); // safe
   } catch (e) {
     // ignore; could be rules issue or offline – role will remain null
     console.warn("Could not create users doc / wallet:", e);

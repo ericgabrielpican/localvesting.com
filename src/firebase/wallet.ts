@@ -20,7 +20,10 @@ export function walletDocRef(uid: string) {
 }
 
 export async function ensureUserWallet(uid: string) {
-  if (!uid) throw new Error("ensureUserWallet: uid missing");
+  if (!uid) {
+    console.error("ensureUserWallet: uid missing");
+    throw new Error("ensureUserWallet: uid missing");
+  }
 
   const ref = walletDocRef(uid);
   const snap = await getDoc(ref);
@@ -33,5 +36,6 @@ export async function ensureUserWallet(uid: string) {
       updatedAt: serverTimestamp(),
     };
     await setDoc(ref, initial, { merge: false });
+
   }
 }

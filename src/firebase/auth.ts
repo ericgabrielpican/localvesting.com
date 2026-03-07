@@ -17,6 +17,8 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { auth } from "./config";
 import {AuthError} from "./auth-error"
+import firebase from "firebase/compat/app";
+import UserCredential = firebase.auth.UserCredential;
 
 /**
  * Robust base URL resolver:
@@ -24,16 +26,19 @@ import {AuthError} from "./auth-error"
  * - Falls back to window.location.origin on web (localhost or any domain)
  * - Final fallback to your current subdomain
  */
+// TODO: encrypt password
 function getAppBaseUrl(): string {
   const extra =
-    (Constants.expoConfig?.extra as any) ??
-    ((Constants as any).manifest?.extra as any) ??
-    ((Constants as any).manifest2?.extra?.extra as any);
+      (Constants.expoConfig?.extra as any) ??
+      ((Constants as any).manifest?.extra as any) ??
+      ((Constants as any).manifest2?.extra?.extra as any);
 
   const fromExtra = extra?.APP_BASE_URL as string | undefined;
 
   if (fromExtra && typeof fromExtra === "string" && fromExtra.trim().length > 0) {
-    return fromExtra.replace(/\/+$/, "");
+    const cleaned = fromExtra.trim().replace(/\/+$/, "");
+    if (/^https?:\/\//i.test(cleaned)) return cleaned;
+    return `http://${cleaned}`;
   }
 
   if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -79,6 +84,17 @@ export async function loginWithEmailPassword(email: string, password: string): P
   }
 }
 
+
+export async function checkVerifiedStatus(): Promise<boolean> {
+  let user = auth.currentUser;
+  if (!user) return false;
+
+  await user.reload(); // refresh from Firebase
+
+  return user.emailVerified;
+}
+
+
 /**
  * Email / password sign up + verification email
  * - keeps user logged in
@@ -95,7 +111,7 @@ export async function registerWithEmailPassword(email: string, password: string)
     });
 
     return res.user;
-  } catch (e) {
+  } catch (e: any) {
     raiseAuthError("registerWithEmailPassword", e);
   }
 }
