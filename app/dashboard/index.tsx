@@ -33,9 +33,11 @@ export default function Dashboard() {
   const totalRaised = campaigns.reduce((s, c) => s + Number(c.raised || 0), 0);
 
   return (
-    <Screen>
+    <Screen style={Theme.screen}>
 
-      <ScrollView contentContainerStyle={{ padding: Theme.spacing.lg }}>
+      <ScrollView
+          style={Theme.content}
+          contentContainerStyle={{ padding: Theme.spacing.lg }}>
         <Text style={styles.title}>Business Dashboard</Text>
 
         <View style={styles.stats}>
