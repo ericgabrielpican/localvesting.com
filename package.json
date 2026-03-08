@@ -23,6 +23,7 @@
     "firebase": "^12.5.0",
     "leaflet": "^1.9.4",
     "maplibre-gl": "^5.16.0",
+    "openai": "^6.27.0",
     "react": "19.1.0",
     "react-cookie-consent": "^10.0.1",
     "react-dom": "19.1.0",
