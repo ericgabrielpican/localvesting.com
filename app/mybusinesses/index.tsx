@@ -204,8 +204,9 @@ export default function MyBusinessesScreen() {
   const hasBusinesses = businesses.length > 0;
 
   return (
-    <Screen>
-      <ScrollView contentContainerStyle={styles.container}>
+    <Screen style={Theme.screen}>
+      <ScrollView style={Theme.content}
+          contentContainerStyle={styles.container}>
         <Text style={styles.pageTitle}>My Businesses</Text>
         <Text style={styles.subtitle}>
           Manage your business profiles and verification status

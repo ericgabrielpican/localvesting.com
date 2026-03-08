@@ -143,9 +143,10 @@ export default function AddBusiness() {
   const handleCancel = () => router.back();
 
   return (
-    <Screen>
+    <Screen style={Theme.screen}>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{width: "100%"}}
+          contentContainerStyle={Theme.content}>
         <Card>
           <Text style={styles.heading}>Add New Business</Text>
 
