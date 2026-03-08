@@ -18,5 +18,6 @@ export default ({ config }) => ({
     EMULATOR_HOST: process.env.EXPO_PUBLIC_EMULATOR_HOST || "127.0.0.1",
 
     TURNSTILE_SITE_KEY: process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY || "",
+    AI_FORMS_1: process.env.EXPO_PUBLIC_AI_FORMS_1,
   },
 });

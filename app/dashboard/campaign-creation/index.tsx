@@ -19,6 +19,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import {refineDescription} from "../../../src/ai/openai"
 
 import Screen from "../../../src/components/ui/Screen";
 import Card from "../../../src/components/ui/Card";
@@ -63,6 +64,7 @@ export default function Index() {
   const [additionalInfoText, setAdditionalInfoText] = useState("");
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [deadlineDate, setDeadlineDate] = useState(new Date());
+  const [refineDesc, setRefineDescription] = useState("Refine description");
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const notify = (title: string, message: string) => {
@@ -208,6 +210,15 @@ export default function Index() {
     return true;
   };
 
+  async function onRefine() {
+    if (refineDesc == "Refine description") {
+      setRefineDescription("Processing ...");
+      let refined: string = await refineDescription(desc);
+      setDesc(refined);
+      setRefineDescription("Refine description");
+    }
+  }
+
   const createCampaign = async () => {
     if (!user) {
       notify("Not logged in", "Please log in again.");
@@ -257,9 +268,10 @@ export default function Index() {
   };
 
   return (
-    <Screen>
+    <Screen style={{justifyContent: "center", display: "flex", alignContent: "center" }}>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={{width: "100%"}}
+          contentContainerStyle={styles.content}>
         <Card>
           <Text style={styles.heading}>Create Campaign</Text>
 
@@ -348,8 +360,14 @@ export default function Index() {
             onChangeText={setTitle}
           />
 
+          <View style={styles.labelRow}>
+            <Text style={[styles.label, { marginBottom: 0 }]}>Description *</Text>
+            <TouchableOpacity onPress={onRefine}>
+              <Text style={styles.refineText}>{refineDesc}</Text>
+            </TouchableOpacity>
+          </View>
+
           <TextField
-              label="Description *"
               placeholder="Describe what you'll use the funds for..."
               value={desc}
               onChangeText={setDesc}
@@ -473,6 +491,8 @@ const styles = StyleSheet.create({
   content: {
     padding: Theme.spacing.lg,
     paddingBottom: Theme.spacing.xl,
+    width: "75%",
+    alignSelf: "center",
   },
   heading: {
     ...Theme.typography.title,
@@ -543,5 +563,16 @@ const styles = StyleSheet.create({
   calculationValue: {
     ...Theme.typography.title,
     color: "#000",
+  },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Theme.spacing.xs,
+  },
+  refineText: {
+    color: Theme.colors.primary || "#2563eb", // Adjust color to match your theme
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
