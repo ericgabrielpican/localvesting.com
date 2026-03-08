@@ -178,9 +178,11 @@ export default function LoginScreen() {
         role: null,
         createdAt: serverTimestamp(),
       });
-      router.replace("/onboarding/chooseRole" as any);
+      // router.replace("/onboarding/chooseRole" as any);
       return;
     }
+
+    return;
 
     const data = snap.data() as any;
     const role = data?.role ?? null;
@@ -241,7 +243,7 @@ export default function LoginScreen() {
         );
       }
 
-      await ensureUserWallet(user.uid);
+      // await ensureUserWallet(user.uid);
       await handlePostLogin(user);
     } catch (e: any) {
       console.log(typeof e);

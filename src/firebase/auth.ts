@@ -6,6 +6,7 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut,
+  deleteUser,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithCredential,
@@ -77,7 +78,8 @@ export function subscribeToAuth(callback: (user: User | null) => void): () => vo
  */
 export async function loginWithEmailPassword(email: string, password: string): Promise<User> {
   try {
-    const res = await signInWithEmailAndPassword(auth, email, password);
+    const res = await signInWithEmailAndPassword(auth, email, password); // this fails on brave
+    // TODO: Fix on brave browser
     return res.user;
   } catch (e) {
     raiseAuthError("loginWithEmailPassword", e);
@@ -132,7 +134,21 @@ export async function resetPassword(email: string): Promise<void> {
  */
 export async function logout(): Promise<void> {
   try {
-    await signOut(auth);
+    // await signOut(auth);
+    const user = auth.currentUser;
+
+    if (user) {
+      try {
+        // 2. Delete the user
+        await deleteUser(user);
+        console.log("User account completely deleted and session ended.");
+
+        // Redirect your user to the home page or login screen here
+
+      } catch (error) {
+        console.error("Error deleting user account:", error.message);
+      }
+    }
   } catch (e) {
     raiseAuthError("logout", e);
   }
