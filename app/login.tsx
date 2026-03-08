@@ -168,49 +168,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handlePostLogin = async (user: any) => {
-    const ref = doc(db, "users", user.uid);
-    const snap = await getDoc(ref);
-
-    if (!snap.exists()) {
-      await setDoc(ref, {
-        email: user.email ?? null,
-        role: null,
-        createdAt: serverTimestamp(),
-      });
-      // router.replace("/onboarding/chooseRole" as any);
-      return;
-    }
-
-    return;
-
-    const data = snap.data() as any;
-    const role = data?.role ?? null;
-
-    if (!role) {
-      router.replace("/onboarding/chooseRole" as any);
-      return;
-    }
-
-    if (role === "admin") {
-      router.replace("/admin" as any);
-      return;
-    }
-
-    if (role === "business") {
-      if (data.businessSetupComplete) router.replace("/dashboard" as any);
-      else router.replace("/onboarding/businessSetup" as any);
-      return;
-    }
-
-    if (role === "investor") {
-      if (data.investorSetupComplete) router.replace("/browse" as any);
-      else router.replace("/onboarding/investorSetup" as any);
-      return;
-    }
-
-    router.replace("/onboarding/chooseRole" as any);
-  };
 
   const handleSubmit = async () => {
     if (submitting || googleLoading) return;
@@ -244,7 +201,6 @@ export default function LoginScreen() {
       }
 
       // await ensureUserWallet(user.uid);
-      await handlePostLogin(user);
     } catch (e: any) {
       console.log(typeof e);
       if( isAuthErr(e)) {
@@ -292,7 +248,6 @@ export default function LoginScreen() {
 
       if (Platform.OS === "web") {
         const user = await loginWithGoogleWeb();
-        await handlePostLogin(user);
       } else {
         Alert.alert(
           "Not available yet",

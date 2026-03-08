@@ -67,7 +67,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // 2) Subscribe to Firestore user doc for role (live)
   useEffect(() => {
-    // when logged out, reset role states
     if (!user) {
       setRole(null);
       setRoleLoading(false);
@@ -75,50 +74,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     setRoleLoading(true);
-
     const ref = doc(db, "users", user.uid);
 
     const unsub = onSnapshot(
-      ref,
-      async (snap) => {
-        // If missing doc (Google login before profile creation, etc.), create it
-       if (!snap.exists()) {
-  try {
-    // await setDoc(
-    //   ref,
-    //   {
-    //     email: user.email ?? null,
-    //     role: null,
-    //     createdAt: serverTimestamp(),
-    //   },
-    //   { merge: true }
-    // );
-    //
-    // // ✅ Safety: ensure wallet exists too
-    // await ensureUserWallet(user.uid); // safe
-  } catch (e) {
-    // ignore; could be rules issue or offline – role will remain null
-    console.warn("Could not create users doc / wallet:", e);
-  }
-  setRole(null);
-  setRoleLoading(false);
-  return;
-}
+        ref,
+        async (snap) => {
+          // If the document doesn't exist yet, CREATE IT HERE
+          if (!snap.exists()) {
+            try {
+              await setDoc(ref, {
+                email: user.email ?? null,
+                role: null,
+                createdAt: serverTimestamp(),
+              });
+              // Note: After setDoc succeeds, this onSnapshot will automatically
+              // trigger again with the new data, so we don't need to do anything else here!
+            } catch (e) {
+              console.warn("Could not create users doc / wallet:", e);
+              setRole(null);
+              setRoleLoading(false);
+            }
+            return;
+          }
 
-
-        const data = snap.data() as any;
-        setRole((data?.role ?? null) as UserRole);
-        setRoleLoading(false);
-      },
-      (err) => {
-        console.warn("Role subscription error:", err);
-        setRole(null);
-        setRoleLoading(false);
-      }
+          // If the document DOES exist, read the role and finish loading
+          const data = snap.data();
+          setRole(data.role ?? null);
+          setRoleLoading(false);
+        },
+        (error) => {
+          console.error("Error listening to user doc:", error);
+          setRoleLoading(false);
+        }
     );
 
     return unsub;
-  }, [user]);
+  }, [user]); // Make sure 'user' is in the dependency array
+
+
 
   const logout = async () => {
     await signOut(auth);
