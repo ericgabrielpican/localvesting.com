@@ -6,6 +6,7 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut,
+  deleteUser,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithCredential,
@@ -16,6 +17,9 @@ import {
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { auth } from "./config";
+import {AuthError} from "./auth-error"
+import firebase from "firebase/compat/app";
+import UserCredential = firebase.auth.UserCredential;
 
 /**
  * Robust base URL resolver:
@@ -23,16 +27,19 @@ import { auth } from "./config";
  * - Falls back to window.location.origin on web (localhost or any domain)
  * - Final fallback to your current subdomain
  */
+// TODO: encrypt password
 function getAppBaseUrl(): string {
   const extra =
-    (Constants.expoConfig?.extra as any) ??
-    ((Constants as any).manifest?.extra as any) ??
-    ((Constants as any).manifest2?.extra?.extra as any);
+      (Constants.expoConfig?.extra as any) ??
+      ((Constants as any).manifest?.extra as any) ??
+      ((Constants as any).manifest2?.extra?.extra as any);
 
   const fromExtra = extra?.APP_BASE_URL as string | undefined;
 
   if (fromExtra && typeof fromExtra === "string" && fromExtra.trim().length > 0) {
-    return fromExtra.replace(/\/+$/, "");
+    const cleaned = fromExtra.trim().replace(/\/+$/, "");
+    if (/^https?:\/\//i.test(cleaned)) return cleaned;
+    return `http://${cleaned}`;
   }
 
   if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -47,16 +54,16 @@ function getAppBaseUrl(): string {
  */
 function raiseAuthError(where: string, e: any): never {
   const code = e?.code || e?.message || String(e);
-  console.error(`[AUTH] ${where}:`, e);
+  // console.error(`[AUTH] ${where}:`, e);
 
-  // Show a dev-visible message on web
-  if (typeof window !== "undefined") {
-    // eslint-disable-next-line no-alert
-    alert(`[AUTH] ${where}: ${code}`);
-  }
+  // // Show a dev-visible message on web
+  // if (typeof window !== "undefined") {
+  //   // eslint-disable-next-line no-alert
+  //   alert(`[AUTH] ${where}: ${code}`);
+  // }
 
   // Re-throw so callers can handle it too
-  throw e;
+  throw new AuthError(where, e);
 }
 
 /**
@@ -71,12 +78,24 @@ export function subscribeToAuth(callback: (user: User | null) => void): () => vo
  */
 export async function loginWithEmailPassword(email: string, password: string): Promise<User> {
   try {
-    const res = await signInWithEmailAndPassword(auth, email, password);
+    const res = await signInWithEmailAndPassword(auth, email, password); // this fails on brave
+    // TODO: Fix on brave browser
     return res.user;
   } catch (e) {
     raiseAuthError("loginWithEmailPassword", e);
   }
 }
+
+
+export async function checkVerifiedStatus(): Promise<boolean> {
+  let user = auth.currentUser;
+  if (!user) return false;
+
+  await user.reload(); // refresh from Firebase
+
+  return user.emailVerified;
+}
+
 
 /**
  * Email / password sign up + verification email
@@ -94,7 +113,7 @@ export async function registerWithEmailPassword(email: string, password: string)
     });
 
     return res.user;
-  } catch (e) {
+  } catch (e: any) {
     raiseAuthError("registerWithEmailPassword", e);
   }
 }
@@ -115,7 +134,21 @@ export async function resetPassword(email: string): Promise<void> {
  */
 export async function logout(): Promise<void> {
   try {
-    await signOut(auth);
+    // await signOut(auth);
+    const user = auth.currentUser;
+
+    if (user) {
+      try {
+        // 2. Delete the user
+        await deleteUser(user);
+        console.log("User account completely deleted and session ended.");
+
+        // Redirect your user to the home page or login screen here
+
+      } catch (error) {
+        console.error("Error deleting user account:", error.message);
+      }
+    }
   } catch (e) {
     raiseAuthError("logout", e);
   }
