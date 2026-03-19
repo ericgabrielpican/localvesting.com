@@ -175,10 +175,7 @@ export default function Index() {
       notify("Category required", "Please select a category.");
       return false;
     }
-    if (!riskLevel) {
-      notify("Risk level required", "Please select a risk level.");
-      return false;
-    }
+
 
     const minNum = Number(minInvestment);
     const goalNum = Number(goal) || 0;
@@ -231,7 +228,6 @@ export default function Index() {
         description: desc.trim(),
         address: campaignAddress.trim(),
         category,
-        riskLevel,
         goal: Number(goal),
         minInvestment: Number(minInvestment),
         apr: Number(apr),

@@ -83,8 +83,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (!snap.exists()) {
             try {
               await setDoc(ref, {
+                uid: user.uid,
                 email: user.email ?? null,
-                role: null,
+                // role: null,
                 createdAt: serverTimestamp(),
               });
               // Note: After setDoc succeeds, this onSnapshot will automatically

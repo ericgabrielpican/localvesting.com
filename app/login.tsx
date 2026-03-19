@@ -1,36 +1,37 @@
 // app/login.tsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-  SafeAreaView,
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  Linking,
-  useWindowDimensions,
-  ScrollView,
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    Alert,
+    SafeAreaView,
+    ActivityIndicator,
+    Platform,
+    Pressable,
+    Linking,
+    useWindowDimensions,
+    ScrollView,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import {useLocalSearchParams, useRouter} from "expo-router";
 import Constants from "expo-constants";
 import {
-  loginWithEmailPassword,
-  registerWithEmailPassword,
-  resetPassword,
-  loginWithGoogleWeb, checkVerifiedStatus,
+    loginWithEmailPassword,
+    registerWithEmailPassword,
+    resetPassword,
+    loginWithGoogleWeb, checkVerifiedStatus,
 } from "../src/firebase/auth";
-import { ensureUserWallet } from "../src/firebase/wallet";
+import {ensureUserWallet} from "../src/firebase/wallet";
 
-import { db, functions } from "../src/firebase/config";
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
+import {db, functions} from "../src/firebase/config";
+import {doc, getDoc, setDoc, updateDoc, serverTimestamp} from "firebase/firestore";
+import {httpsCallable} from "firebase/functions";
 
 import TurnstileWidget from "../src/components/capcha/TurnstileWidget.web";
 import {AuthError} from "expo-auth-session";
 import {isAuthErr} from "../src/firebase/auth-error";
+import {User} from "firebase/auth";
 
 const VERIFY_FN_NAME = "verifyTurnstile";
 type Mode = "login" | "signup";
@@ -45,617 +46,641 @@ type Mode = "login" | "signup";
 type Extra = Record<string, any>;
 
 function getExtra(): Extra {
-  return (
-    (Constants.expoConfig?.extra as Extra) ||
-    ((Constants as any).manifest?.extra as Extra) ||
-    ((Constants as any).manifest2?.extra?.extra as Extra) ||
-    {}
-  );
+    return (
+        (Constants.expoConfig?.extra as Extra) ||
+        ((Constants as any).manifest?.extra as Extra) ||
+        ((Constants as any).manifest2?.extra?.extra as Extra) ||
+        {}
+    );
 }
 
 function env(key: string): string | undefined {
-  const extra = getExtra();
-  return extra?.[key] ?? process.env[`EXPO_PUBLIC_${key}`] ?? process.env[key];
+    const extra = getExtra();
+    return extra?.[key] ?? process.env[`EXPO_PUBLIC_${key}`] ?? process.env[key];
 }
 
 // Cloudflare Turnstile site key (SAFE to be public)
 const TURNSTILE_SITE_KEY = env("TURNSTILE_SITE_KEY");
 
 export default function LoginScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams<{ mode?: string }>();
-  const { width } = useWindowDimensions();
+    const router = useRouter();
+    const params = useLocalSearchParams<{ mode?: string }>();
+    const {width} = useWindowDimensions();
 
-  const initialMode: Mode = params?.mode === "signup" ? "signup" : "login";
+    const initialMode: Mode = params?.mode === "signup" ? "signup" : "login";
 
-  const [mode, setMode] = useState<Mode>(initialMode);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+    const [mode, setMode] = useState<Mode>(initialMode);
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
 
-  const [submitting, setSubmitting] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
 
-  // Turnstile token from widget (web)
-  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+    // Turnstile token from widget (web)
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
-  // Guards to stop verify loops
-  const verifyingRef = useRef(false);
-  const lastVerifiedTokenRef = useRef<string | null>(null);
-  const passwordInputRef = useRef<TextInput>(null);
+    // Guards to stop verify loops
+    const verifyingRef = useRef(false);
+    const lastVerifiedTokenRef = useRef<string | null>(null);
+    const passwordInputRef = useRef<TextInput>(null);
 
-  // Legal acceptance (required ONLY for signup)
-  const [readPrivacy, setReadPrivacy] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+    // Legal acceptance (required ONLY for signup)
+    const [readPrivacy, setReadPrivacy] = useState(false);
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
 
-  const legalOk = useMemo(() => {
-    if (mode === "login") return true;
-    return readPrivacy && acceptedTerms;
-  }, [mode, readPrivacy, acceptedTerms]);
+    const legalOk = useMemo(() => {
+        if (mode === "login") return true;
+        return readPrivacy && acceptedTerms;
+    }, [mode, readPrivacy, acceptedTerms]);
 
-  useEffect(() => {
-    const next: Mode = params?.mode === "signup" ? "signup" : "login";
-    setMode(next);
-  }, [params?.mode]);
+    useEffect(() => {
+        const next: Mode = params?.mode === "signup" ? "signup" : "login";
+        setMode(next);
+    }, [params?.mode]);
 
-  useEffect(() => {
-    if (mode === "login") {
-      setReadPrivacy(false);
-      setAcceptedTerms(false);
+    useEffect(() => {
+        if (mode === "login") {
+            setReadPrivacy(false);
+            setAcceptedTerms(false);
+        }
+    }, [mode]);
+
+    const openLegalPage = (
+        path: "/privacypolicy" | "/cookiepolicy" | "/terms"
+    ) => {
+        try {
+            router.push(path as any);
+        } catch {
+            Linking.openURL(path);
+        }
+    };
+
+    const requireLegal = () => {
+        if (mode === "login") return true;
+        if (!readPrivacy || !acceptedTerms) {
+            Alert.alert(
+                "Before you continue",
+                "To create an account, please read and accept the Privacy/Cookie Policy and the Terms & Conditions."
+            );
+            return false;
+        }
+        return true;
+    };
+
+    const requireTurnstile = async () => {
+        if (Platform.OS !== "web") return;
+
+        if (!TURNSTILE_SITE_KEY) {
+            Alert.alert(
+                "Config missing",
+                "Turnstile site key is missing. Set EXPO_PUBLIC_TURNSTILE_SITE_KEY and map it into expo.extra."
+            );
+            throw new Error("TURNSTILE_SITE_KEY missing");
+        }
+
+        if (!turnstileToken) {
+            Alert.alert(
+                "Verification required",
+                "Please complete the security check."
+            );
+            throw new Error("Turnstile token missing");
+        }
+
+        // Prevent repeated verification for the same token
+        if (lastVerifiedTokenRef.current === turnstileToken) return;
+
+        // Prevent concurrent verify calls
+        if (verifyingRef.current) return;
+
+        verifyingRef.current = true;
+        try {
+            const verify = httpsCallable(functions, VERIFY_FN_NAME);
+            const res: any = await verify({token: turnstileToken});
+
+            if (res?.data?.success === false) {
+                lastVerifiedTokenRef.current = null;
+                setTurnstileToken(null);
+                throw new Error(res?.data?.message ?? "Turnstile verification failed");
+            }
+
+            lastVerifiedTokenRef.current = turnstileToken;
+        } finally {
+            verifyingRef.current = false;
+        }
+    };
+
+     async function handleNav(user: User){
+        const userDocRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userDocRef);
+
+        const contentRole = userSnap.exists() ? userSnap.data().role : null;
+
+        switch (contentRole) {
+            case "investor":
+            case "admin":
+                router.replace("browse");
+                break;
+            case "business":
+                router.replace("dashboard");
+                break;
+            default:
+                router.replace("/onboarding/chooseRole");
+        }
     }
-  }, [mode]);
 
-  const openLegalPage = (
-    path: "/privacypolicy" | "/cookiepolicy" | "/terms"
-  ) => {
-    try {
-      router.push(path as any);
-    } catch {
-      Linking.openURL(path);
-    }
-  };
+    const handleSubmit = async () => {
+        if (submitting || googleLoading) return;
 
-  const requireLegal = () => {
-    if (mode === "login") return true;
-    if (!readPrivacy || !acceptedTerms) {
-      Alert.alert(
-        "Before you continue",
-        "To create an account, please read and accept the Privacy/Cookie Policy and the Terms & Conditions."
-      );
-      return false;
-    }
-    return true;
-  };
+        if (!requireLegal()) return;
 
-  const requireTurnstile = async () => {
-    if (Platform.OS !== "web") return;
+        if (!email.trim() || !password) {
+            Alert.alert("Missing info", "Please enter email and password.");
+            return;
+        }
 
-    if (!TURNSTILE_SITE_KEY) {
-      Alert.alert(
-        "Config missing",
-        "Turnstile site key is missing. Set EXPO_PUBLIC_TURNSTILE_SITE_KEY and map it into expo.extra."
-      );
-      throw new Error("TURNSTILE_SITE_KEY missing");
-    }
+        try {
+            setSubmitting(true);
 
-    if (!turnstileToken) {
-      Alert.alert(
-        "Verification required",
-        "Please complete the security check."
-      );
-      throw new Error("Turnstile token missing");
-    }
+            await requireTurnstile();
 
-    // Prevent repeated verification for the same token
-    if (lastVerifiedTokenRef.current === turnstileToken) return;
+            let user;
+            if (mode === "login") {
+                user = await loginWithEmailPassword(email.trim(), password);
+            } else {
+                user = await registerWithEmailPassword(email.trim(), password);
+                await setDoc(
+                    doc(db, "users", user.uid),
+                    {
+                        email: email.trim(),
+                        role: null,
+                        createdAt: serverTimestamp(),
+                    },
+                    {merge: true}
+                );
+            }
+            // check user role and route
 
-    // Prevent concurrent verify calls
-    if (verifyingRef.current) return;
+            await handleNav(user);
 
-    verifyingRef.current = true;
-    try {
-      const verify = httpsCallable(functions, VERIFY_FN_NAME);
-      const res: any = await verify({ token: turnstileToken });
-
-      if (res?.data?.success === false) {
-        lastVerifiedTokenRef.current = null;
-        setTurnstileToken(null);
-        throw new Error(res?.data?.message ?? "Turnstile verification failed");
-      }
-
-      lastVerifiedTokenRef.current = turnstileToken;
-    } finally {
-      verifyingRef.current = false;
-    }
-  };
+            // await ensureUserWallet(user.uid);
+        } catch (e: any) {
+            console.log(typeof e);
+            if (isAuthErr(e)) {
+                console.warn("this is not valid");
+            } else {
+                console.error("ASDNJSNDNja");
+                Alert.alert(
+                    "Authentication error",
+                    e?.message ?? "Could not authenticate."
+                );
+            }
+        } finally {
+            setSubmitting(false);
+        }
 
 
-  const handleSubmit = async () => {
-    if (submitting || googleLoading) return;
+    };
 
-    if (!requireLegal()) return;
+    const handleResetPassword = async () => {
+        if (!email.trim()) {
+            Alert.alert("Enter email", "Please enter your email first.");
+            return;
+        }
+        try {
+            await resetPassword(email.trim());
+            Alert.alert(
+                "Password reset",
+                "If an account exists for that email, you'll receive a reset link."
+            );
+        } catch (e: any) {
+            console.error(e);
+            Alert.alert(
+                "Error",
+                e?.message ?? "Could not send password reset email."
+            );
+        }
+    };
 
-    if (!email.trim() || !password) {
-      Alert.alert("Missing info", "Please enter email and password.");
-      return;
-    }
+    const handleGoogle = async () => {
+        if (googleLoading || submitting) return;
+        if (!requireLegal()) return;
 
-    try {
-      setSubmitting(true);
+        try {
+            setGoogleLoading(true);
 
-      await requireTurnstile();
+            await requireTurnstile();
 
-      let user;
-      if (mode === "login") {
-        user = await loginWithEmailPassword(email.trim(), password);
-      } else {
-        user = await registerWithEmailPassword(email.trim(), password);
-        await setDoc(
-            doc(db, "users", user.uid),
-            {
-              email: email.trim(),
-              role: null,
-              createdAt: serverTimestamp(),
-            },
-            {merge: true}
-        );
-      }
+            if (Platform.OS === "web") {
+                const user = await loginWithGoogleWeb();
+                handleNav(user);
+            } else {
+                Alert.alert(
+                    "Not available yet",
+                    "Google sign-in is currently implemented for web only."
+                );
+            }
+        } catch (e: any) {
+            console.error(e);
+            Alert.alert(
+                "Google sign-in error",
+                e?.message ?? "Could not sign in with Google."
+            );
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
 
-      // await ensureUserWallet(user.uid);
-    } catch (e: any) {
-      console.log(typeof e);
-      if( isAuthErr(e)) {
-        console.warn("this is not valid");
-      }else{
-        console.error("ASDNJSNDNja");
-        Alert.alert(
-            "Authentication error",
-            e?.message ?? "Could not authenticate."
-        );
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!email.trim()) {
-      Alert.alert("Enter email", "Please enter your email first.");
-      return;
-    }
-    try {
-      await resetPassword(email.trim());
-      Alert.alert(
-        "Password reset",
-        "If an account exists for that email, you'll receive a reset link."
-      );
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert(
-        "Error",
-        e?.message ?? "Could not send password reset email."
-      );
-    }
-  };
-
-  const handleGoogle = async () => {
-    if (googleLoading || submitting) return;
-    if (!requireLegal()) return;
-
-    try {
-      setGoogleLoading(true);
-
-      await requireTurnstile();
-
-      if (Platform.OS === "web") {
-        const user = await loginWithGoogleWeb();
-      } else {
-        Alert.alert(
-          "Not available yet",
-          "Google sign-in is currently implemented for web only."
-        );
-      }
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert(
-        "Google sign-in error",
-        e?.message ?? "Could not sign in with Google."
-      );
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const CheckboxRow = ({
-    checked,
-    onToggle,
-    children,
-  }: {
-    checked: boolean;
-    onToggle: () => void;
-    children: React.ReactNode;
-  }) => (
-    <Pressable
-      onPress={onToggle}
-      style={{
-        flexDirection: "row",
-        alignItems: "flex-start",
-        gap: 10,
-        paddingVertical: 6,
-      }}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
-    >
-      <View
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 4,
-          borderWidth: 1,
-          borderColor: checked ? "#2563eb" : "#d1d5db",
-          backgroundColor: checked ? "#2563eb" : "#ffffff",
-          marginTop: 2,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {checked ? (
-          <View
+    const CheckboxRow = ({
+                             checked,
+                             onToggle,
+                             children,
+                         }: {
+        checked: boolean;
+        onToggle: () => void;
+        children: React.ReactNode;
+    }) => (
+        <Pressable
+            onPress={onToggle}
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: 2,
-              backgroundColor: "#ffffff",
+                flexDirection: "row",
+                alignItems: "flex-start",
+                gap: 10,
+                paddingVertical: 6,
             }}
-          />
-        ) : null}
-      </View>
-      <View style={{ flex: 1 }}>{children}</View>
-    </Pressable>
-  );
-
-  const cardWidth = Math.min(520, Math.max(320, width - 40));
-  const signupDisabled = mode === "signup" && !legalOk;
-
-  const primaryBtnStyle = {
-    backgroundColor: "#2563eb",
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  };
-
-  const primaryBtnTextStyle = {
-    color: "#ffffff",
-    fontWeight: "600" as const,
-    fontSize: 16,
-  };
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }}>
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          padding: 20,
-        }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View
-          style={{
-            width: cardWidth,
-            borderWidth: 1,
-            borderColor: "#e5e7eb",
-            backgroundColor: "#ffffff",
-            borderRadius: 16,
-            padding: 18,
-          }}
+            accessibilityRole="checkbox"
+            accessibilityState={{checked}}
         >
-          <Text
-            style={{
-              fontSize: 26,
-              fontWeight: "700",
-              color: "#111827",
-              marginBottom: 6,
-              textAlign: "center",
-            }}
-          >
-            {mode === "login" ? "Welcome back" : "Create account"}
-          </Text>
-
-          <Text
-            style={{
-              fontSize: 13,
-              color: "#6b7280",
-              marginBottom: 18,
-              textAlign: "center",
-              lineHeight: 18,
-            }}
-          >
-            {mode === "login"
-              ? "Log in to continue."
-              : "Create an account to continue."}
-          </Text>
-
-          <Text style={{ marginBottom: 4, color: "#374151", fontSize: 14 }}>
-            Email
-          </Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            placeholder="you@example.com"
-            placeholderTextColor="#9ca3af"
-            returnKeyType="next"
-            blurOnSubmit={false}
-            onSubmitEditing={() => passwordInputRef.current?.focus()}
-            editable={!submitting && !googleLoading}
-            style={{
-              borderWidth: 1,
-              borderColor: "#d1d5db",
-              borderRadius: 12,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              marginBottom: 14,
-            }}
-          />
-
-          <Text style={{ marginBottom: 4, color: "#374151", fontSize: 14 }}>
-            Password
-          </Text>
-          <TextInput
-            ref={passwordInputRef}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="••••••••"
-            placeholderTextColor="#9ca3af"
-            returnKeyType={mode === "login" ? "go" : "done"}
-            onSubmitEditing={handleSubmit}
-            editable={!submitting && !googleLoading}
-            style={{
-              borderWidth: 1,
-              borderColor: "#d1d5db",
-              borderRadius: 12,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              marginBottom: 10,
-            }}
-          />
-
-          {mode === "login" && (
-            <TouchableOpacity onPress={handleResetPassword}>
-              <Text
-                style={{ fontSize: 13, color: "#2563eb", marginBottom: 14 }}
-              >
-                Forgot password?
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {mode === "signup" && (
             <View
-              style={{
-                borderWidth: 1,
-                borderColor: "#e5e7eb",
-                backgroundColor: "#f9fafb",
-                borderRadius: 12,
-                padding: 12,
-                marginBottom: 14,
-              }}
-            >
-              <CheckboxRow
-                checked={readPrivacy}
-                onToggle={() => setReadPrivacy((p) => !p)}
-              >
-                <Text style={{ color: "#111827", fontSize: 13, lineHeight: 18 }}>
-                  I have read and understand the{" "}
-                  <Text
-                    style={{
-                      color: "#2563eb",
-                      textDecorationLine: "underline",
-                    }}
-                    onPress={() => openLegalPage("/privacypolicy")}
-                  >
-                    Privacy Policy
-                  </Text>{" "}
-                  and{" "}
-                  <Text
-                    style={{
-                      color: "#2563eb",
-                      textDecorationLine: "underline",
-                    }}
-                    onPress={() => openLegalPage("/cookiepolicy")}
-                  >
-                    Cookie Policy
-                  </Text>
-                  .
-                </Text>
-              </CheckboxRow>
-
-              <CheckboxRow
-                checked={acceptedTerms}
-                onToggle={() => setAcceptedTerms((p) => !p)}
-              >
-                <Text style={{ color: "#111827", fontSize: 13, lineHeight: 18 }}>
-                  I agree to the{" "}
-                  <Text
-                    style={{
-                      color: "#2563eb",
-                      textDecorationLine: "underline",
-                    }}
-                    onPress={() => openLegalPage("/terms")}
-                  >
-                    Terms & Conditions
-                  </Text>
-                  .
-                </Text>
-              </CheckboxRow>
-
-              {signupDisabled ? (
-                <Text style={{ marginTop: 6, fontSize: 12, color: "#b45309" }}>
-                  Accept the policies to create an account.
-                </Text>
-              ) : null}
-            </View>
-          )}
-
-          {Platform.OS === "web" && (
-            <View style={{ marginBottom: 14 }}>
-              {TURNSTILE_SITE_KEY ? (
-                <TurnstileWidget
-                  siteKey={TURNSTILE_SITE_KEY}
-                  onToken={(t) => setTurnstileToken(t)}
-                  onExpired={() => {
-                    lastVerifiedTokenRef.current = null;
-                    setTurnstileToken(null);
-                  }}
-                  onError={() => {
-                    lastVerifiedTokenRef.current = null;
-                    setTurnstileToken(null);
-                    Alert.alert(
-                      "Security check error",
-                      "Could not load Turnstile. Please refresh."
-                    );
-                  }}
-                />
-              ) : (
-                <View
-                  style={{
-                    borderWidth: 1,
-                    borderColor: "#fecaca",
-                    backgroundColor: "#fff1f2",
-                    borderRadius: 12,
-                    padding: 10,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: "#991b1b",
-                      textAlign: "center",
-                    }}
-                  >
-                    Turnstile site key missing. Set
-                    EXPO_PUBLIC_TURNSTILE_SITE_KEY and map it into expo.extra.
-                  </Text>
-                </View>
-              )}
-
-              <Text
                 style={{
-                  fontSize: 12,
-                  color: "#6b7280",
-                  marginTop: 6,
-                  textAlign: "center",
+                    width: 18,
+                    height: 18,
+                    borderRadius: 4,
+                    borderWidth: 1,
+                    borderColor: checked ? "#2563eb" : "#d1d5db",
+                    backgroundColor: checked ? "#2563eb" : "#ffffff",
+                    marginTop: 2,
+                    alignItems: "center",
+                    justifyContent: "center",
                 }}
-              >
-                {turnstileToken
-                  ? "✅ Security check completed"
-                  : "Complete the security check above"}
-              </Text>
+            >
+                {checked ? (
+                    <View
+                        style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 2,
+                            backgroundColor: "#ffffff",
+                        }}
+                    />
+                ) : null}
             </View>
-          )}
+            <View style={{flex: 1}}>{children}</View>
+        </Pressable>
+    );
 
-          <TouchableOpacity
-            onPress={handleSubmit}
-            disabled={submitting || googleLoading || signupDisabled}
-            style={[
-              primaryBtnStyle,
-              {
-                marginBottom: 12,
-                opacity:
-                  submitting || googleLoading || signupDisabled ? 0.6 : 1,
-              },
-            ]}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={primaryBtnTextStyle}>
-                {mode === "login" ? "Log in" : "Sign up"}
-              </Text>
-            )}
-          </TouchableOpacity>
+    const cardWidth = Math.min(520, Math.max(320, width - 40));
+    const signupDisabled = mode === "signup" && !legalOk;
 
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginVertical: 10,
-            }}
-          >
-            <View
-              style={{ flex: 1, height: 1, backgroundColor: "#e5e7eb" }}
-            />
-            <Text
-              style={{ marginHorizontal: 8, fontSize: 12, color: "#9ca3af" }}
+    const primaryBtnStyle = {
+        backgroundColor: "#2563eb",
+        borderRadius: 12,
+        paddingVertical: 12,
+        alignItems: "center" as const,
+        justifyContent: "center" as const,
+    };
+
+    const primaryBtnTextStyle = {
+        color: "#ffffff",
+        fontWeight: "600" as const,
+        fontSize: 16,
+    };
+
+    return (
+        <SafeAreaView style={{flex: 1, backgroundColor: "#ffffff"}}>
+            <ScrollView
+                contentContainerStyle={{
+                    flexGrow: 1,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    padding: 20,
+                }}
+                keyboardShouldPersistTaps="handled"
             >
-              OR
-            </Text>
-            <View
-              style={{ flex: 1, height: 1, backgroundColor: "#e5e7eb" }}
-            />
-          </View>
+                <View
+                    style={{
+                        width: cardWidth,
+                        borderWidth: 1,
+                        borderColor: "#e5e7eb",
+                        backgroundColor: "#ffffff",
+                        borderRadius: 16,
+                        padding: 18,
+                    }}
+                >
+                    <Text
+                        style={{
+                            fontSize: 26,
+                            fontWeight: "700",
+                            color: "#111827",
+                            marginBottom: 6,
+                            textAlign: "center",
+                        }}
+                    >
+                        {mode === "login" ? "Welcome back" : "Create account"}
+                    </Text>
 
-          <TouchableOpacity
-            onPress={handleGoogle}
-            disabled={googleLoading || submitting || signupDisabled}
-            style={[
-              primaryBtnStyle,
-              {
-                marginBottom: 14,
-                opacity:
-                  googleLoading || submitting || signupDisabled ? 0.6 : 1,
-              },
-            ]}
-          >
-            {googleLoading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={primaryBtnTextStyle}>
-                {mode === "login"
-                  ? "Continue with Google"
-                  : "Sign up with Google"}
-              </Text>
-            )}
-          </TouchableOpacity>
+                    <Text
+                        style={{
+                            fontSize: 13,
+                            color: "#6b7280",
+                            marginBottom: 18,
+                            textAlign: "center",
+                            lineHeight: 18,
+                        }}
+                    >
+                        {mode === "login"
+                            ? "Log in to continue."
+                            : "Create an account to continue."}
+                    </Text>
 
-          <TouchableOpacity
-            onPress={() => {
-              const next = mode === "login" ? "signup" : "login";
-              setMode(next);
-              router.replace(`/login?mode=${next}` as any);
-              lastVerifiedTokenRef.current = null;
-            }}
-            style={{ marginTop: 10 }}
-          >
-            <Text
-              style={{ fontSize: 13, textAlign: "center", color: "#4b5563" }}
-            >
-              {mode === "login" ? (
-                <>
-                  No account?{" "}
-                  <Text style={{ color: "#2563eb", fontWeight: "600" }}>
-                    Sign up
-                  </Text>
-                  .
-                </>
-              ) : (
-                <>
-                  Already have an account?{" "}
-                  <Text style={{ color: "#2563eb", fontWeight: "600" }}>
-                    Log in
-                  </Text>
-                  .
-                </>
-              )}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+                    <Text style={{marginBottom: 4, color: "#374151", fontSize: 14}}>
+                        Email
+                    </Text>
+                    <TextInput
+                        value={email}
+                        onChangeText={setEmail}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="email-address"
+                        placeholder="you@example.com"
+                        placeholderTextColor="#9ca3af"
+                        returnKeyType="next"
+                        blurOnSubmit={false}
+                        onSubmitEditing={() => passwordInputRef.current?.focus()}
+                        editable={!submitting && !googleLoading}
+                        style={{
+                            borderWidth: 1,
+                            borderColor: "#d1d5db",
+                            borderRadius: 12,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            marginBottom: 14,
+                        }}
+                    />
+
+                    <Text style={{marginBottom: 4, color: "#374151", fontSize: 14}}>
+                        Password
+                    </Text>
+                    <TextInput
+                        ref={passwordInputRef}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        placeholder="••••••••"
+                        placeholderTextColor="#9ca3af"
+                        returnKeyType={mode === "login" ? "go" : "done"}
+                        onSubmitEditing={handleSubmit}
+                        editable={!submitting && !googleLoading}
+                        style={{
+                            borderWidth: 1,
+                            borderColor: "#d1d5db",
+                            borderRadius: 12,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            marginBottom: 10,
+                        }}
+                    />
+
+                    {mode === "login" && (
+                        <TouchableOpacity onPress={handleResetPassword}>
+                            <Text
+                                style={{fontSize: 13, color: "#2563eb", marginBottom: 14}}
+                            >
+                                Forgot password?
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {mode === "signup" && (
+                        <View
+                            style={{
+                                borderWidth: 1,
+                                borderColor: "#e5e7eb",
+                                backgroundColor: "#f9fafb",
+                                borderRadius: 12,
+                                padding: 12,
+                                marginBottom: 14,
+                            }}
+                        >
+                            <CheckboxRow
+                                checked={readPrivacy}
+                                onToggle={() => setReadPrivacy((p) => !p)}
+                            >
+                                <Text style={{color: "#111827", fontSize: 13, lineHeight: 18}}>
+                                    I have read and understand the{" "}
+                                    <Text
+                                        style={{
+                                            color: "#2563eb",
+                                            textDecorationLine: "underline",
+                                        }}
+                                        onPress={() => openLegalPage("/privacypolicy")}
+                                    >
+                                        Privacy Policy
+                                    </Text>{" "}
+                                    and{" "}
+                                    <Text
+                                        style={{
+                                            color: "#2563eb",
+                                            textDecorationLine: "underline",
+                                        }}
+                                        onPress={() => openLegalPage("/cookiepolicy")}
+                                    >
+                                        Cookie Policy
+                                    </Text>
+                                    .
+                                </Text>
+                            </CheckboxRow>
+
+                            <CheckboxRow
+                                checked={acceptedTerms}
+                                onToggle={() => setAcceptedTerms((p) => !p)}
+                            >
+                                <Text style={{color: "#111827", fontSize: 13, lineHeight: 18}}>
+                                    I agree to the{" "}
+                                    <Text
+                                        style={{
+                                            color: "#2563eb",
+                                            textDecorationLine: "underline",
+                                        }}
+                                        onPress={() => openLegalPage("/terms")}
+                                    >
+                                        Terms & Conditions
+                                    </Text>
+                                    .
+                                </Text>
+                            </CheckboxRow>
+
+                            {signupDisabled ? (
+                                <Text style={{marginTop: 6, fontSize: 12, color: "#b45309"}}>
+                                    Accept the policies to create an account.
+                                </Text>
+                            ) : null}
+                        </View>
+                    )}
+
+                    {Platform.OS === "web" && (
+                        <View style={{marginBottom: 14}}>
+                            {TURNSTILE_SITE_KEY ? (
+                                <TurnstileWidget
+                                    siteKey={TURNSTILE_SITE_KEY}
+                                    onToken={(t) => setTurnstileToken(t)}
+                                    onExpired={() => {
+                                        lastVerifiedTokenRef.current = null;
+                                        setTurnstileToken(null);
+                                    }}
+                                    onError={() => {
+                                        lastVerifiedTokenRef.current = null;
+                                        setTurnstileToken(null);
+                                        Alert.alert(
+                                            "Security check error",
+                                            "Could not load Turnstile. Please refresh."
+                                        );
+                                    }}
+                                />
+                            ) : (
+                                <View
+                                    style={{
+                                        borderWidth: 1,
+                                        borderColor: "#fecaca",
+                                        backgroundColor: "#fff1f2",
+                                        borderRadius: 12,
+                                        padding: 10,
+                                    }}
+                                >
+                                    <Text
+                                        style={{
+                                            fontSize: 12,
+                                            color: "#991b1b",
+                                            textAlign: "center",
+                                        }}
+                                    >
+                                        Turnstile site key missing. Set
+                                        EXPO_PUBLIC_TURNSTILE_SITE_KEY and map it into expo.extra.
+                                    </Text>
+                                </View>
+                            )}
+
+                            <Text
+                                style={{
+                                    fontSize: 12,
+                                    color: "#6b7280",
+                                    marginTop: 6,
+                                    textAlign: "center",
+                                }}
+                            >
+                                {turnstileToken
+                                    ? "✅ Security check completed"
+                                    : "Complete the security check above"}
+                            </Text>
+                        </View>
+                    )}
+
+                    <TouchableOpacity
+                        onPress={handleSubmit}
+                        disabled={submitting || googleLoading || signupDisabled}
+                        style={[
+                            primaryBtnStyle,
+                            {
+                                marginBottom: 12,
+                                opacity:
+                                    submitting || googleLoading || signupDisabled ? 0.6 : 1,
+                            },
+                        ]}
+                    >
+                        {submitting ? (
+                            <ActivityIndicator color="#ffffff"/>
+                        ) : (
+                            <Text style={primaryBtnTextStyle}>
+                                {mode === "login" ? "Log in" : "Sign up"}
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+
+                    <View
+                        style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginVertical: 10,
+                        }}
+                    >
+                        <View
+                            style={{flex: 1, height: 1, backgroundColor: "#e5e7eb"}}
+                        />
+                        <Text
+                            style={{marginHorizontal: 8, fontSize: 12, color: "#9ca3af"}}
+                        >
+                            OR
+                        </Text>
+                        <View
+                            style={{flex: 1, height: 1, backgroundColor: "#e5e7eb"}}
+                        />
+                    </View>
+
+                    <TouchableOpacity
+                        onPress={handleGoogle}
+                        disabled={googleLoading || submitting || signupDisabled}
+                        style={[
+                            primaryBtnStyle,
+                            {
+                                marginBottom: 14,
+                                opacity:
+                                    googleLoading || submitting || signupDisabled ? 0.6 : 1,
+                            },
+                        ]}
+                    >
+                        {googleLoading ? (
+                            <ActivityIndicator color="#ffffff"/>
+                        ) : (
+                            <Text style={primaryBtnTextStyle}>
+                                {mode === "login"
+                                    ? "Continue with Google"
+                                    : "Sign up with Google"}
+                            </Text>
+                        )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={() => {
+                            const next = mode === "login" ? "signup" : "login";
+                            setMode(next);
+                            router.replace(`/login?mode=${next}` as any);
+                            lastVerifiedTokenRef.current = null;
+                        }}
+                        style={{marginTop: 10}}
+                    >
+                        <Text
+                            style={{fontSize: 13, textAlign: "center", color: "#4b5563"}}
+                        >
+                            {mode === "login" ? (
+                                <>
+                                    No account?{" "}
+                                    <Text style={{color: "#2563eb", fontWeight: "600"}}>
+                                        Sign up
+                                    </Text>
+                                    .
+                                </>
+                            ) : (
+                                <>
+                                    Already have an account?{" "}
+                                    <Text style={{color: "#2563eb", fontWeight: "600"}}>
+                                        Log in
+                                    </Text>
+                                    .
+                                </>
+                            )}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+        </SafeAreaView>
+    );
 }
